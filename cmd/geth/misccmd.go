@@ -134,7 +134,7 @@ func makedag(ctx *cli.Context) error {
 
 func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", params.VersionWithMeta)
+	fmt.Println("Version:", params.VersionWithMeta())
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
