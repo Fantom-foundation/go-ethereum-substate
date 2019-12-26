@@ -118,7 +118,7 @@ var (
 
 	debEthereum = debPackage{
 		Name:        "ethereum",
-		Version:     params.Version,
+		Version:     params.Version(),
 		Executables: debExecutables,
 	}
 
@@ -794,7 +794,7 @@ func doWindowsInstaller(cmdline []string) {
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
 	// minimum).
-	version := strings.Split(params.Version, ".")
+	version := strings.Split(params.Version(), ".")
 	if env.Commit != "" {
 		version[2] += "-" + env.Commit[:8]
 	}
@@ -925,7 +925,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 		}
 	}
 	// Render the version and package strings
-	version := params.Version
+	version := params.Version()
 	if isUnstableBuild(env) {
 		version += "-SNAPSHOT"
 	}
@@ -1016,7 +1016,7 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 			}
 		}
 	}
-	version := params.Version
+	version := params.Version()
 	if isUnstableBuild(env) {
 		version += "-unstable." + env.Buildnum
 	}
