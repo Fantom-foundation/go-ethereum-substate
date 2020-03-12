@@ -1926,6 +1926,25 @@ var unitMap = {
 };
 
 /**
+ * Should be called to validator descriptions to hex-string over JSON
+ *
+ * @method toMoniker
+ * @param {String} name is validator name in utf8
+ * @param {String} description is validator description in utf8
+ * @param {String} webSite is validator web site URL
+ * @returns {String} hex string with JSON data
+ */
+var toMoniker = function (name, description, webSite) {
+  var jsData = {
+    Name: name,
+    Description: description,
+    WebSite: webSite
+  };
+
+  return toHex(jsData)
+};
+
+/**
  * Should be called to pad string to expected length
  *
  * @method padLeft
@@ -2453,6 +2472,7 @@ var isTopic = function (topic) {
 };
 
 module.exports = {
+    toMoniker: toMoniker,
     padLeft: padLeft,
     padRight: padRight,
     toHex: toHex,
