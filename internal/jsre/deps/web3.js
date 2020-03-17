@@ -2644,11 +2644,6 @@ var properties = function () {
             name: 'version.lachesis',
             getter: 'eth_protocolVersion',
             inputFormatter: utils.toDecimal
-        }),
-        new Property({
-            name: 'version.whisper',
-            getter: 'shh_version',
-            inputFormatter: utils.toDecimal
         })
     ];
 };
@@ -5473,7 +5468,6 @@ var methods = function () {
         params: 0
     });
 
-    //>>>>
     var getEvent = new Method({
         name: 'getEvent',
         call: 'ftm_getEvent',
@@ -5549,10 +5543,6 @@ var properties = function () {
         new Property({
             name: 'coinbase',
             getter: 'eth_coinbase'
-        }),
-        new Property({
-            name: 'mining',
-            getter: 'eth_mining'
         }),
         new Property({
             name: 'hashrate',
@@ -6056,16 +6046,7 @@ var methods = function () {
 };
 
 var properties = function () {
-    return [
-        new Property({
-            name: 'hive',
-            getter: 'bzz_hive'
-        }),
-        new Property({
-            name: 'info',
-            getter: 'bzz_info'
-        })
-    ];
+    return [];
 };
 
 
