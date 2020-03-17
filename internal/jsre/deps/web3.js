@@ -5463,6 +5463,43 @@ var methods = function () {
         params: 0
     });
 
+    //>>>>
+    var getEvent = new Method({
+        name: 'getEvent',
+        call: 'ftm_getEvent',
+        params: 2
+    });
+
+    var getEventHeader = new Method({
+        name: 'getEventHeader',
+        call: 'ftm_getEventHeader',
+        params: 1
+    });
+
+    var getHeads = new Method({
+        name: 'getHeads',
+        call: 'ftm_getHeads',
+        params: 1
+    });
+
+    var getConsensusTime = new Method({
+        name: 'getConsensusTime',
+        call: 'ftm_getConsensusTime',
+        params: 1
+    });
+
+    var currentEpoch = new Method({
+        name: 'currentEpoch',
+        call: 'ftm_currentEpoch',
+        params: 0
+    });
+
+    var getEpochStats = new Method({
+        name: 'getEpochStats',
+        call: 'ftm_getEpochStats',
+        params: 1
+    });
+
     return [
         getBalance,
         getStorageAt,
@@ -5486,7 +5523,13 @@ var methods = function () {
         compileLLL,
         compileSerpent,
         submitWork,
-        getWork
+        getWork,
+        getEvent,
+        getEventHeader,
+        getHeads,
+        getConsensusTime,
+        currentEpoch,
+        getEpochStats,
     ];
 };
 
