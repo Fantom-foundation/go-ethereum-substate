@@ -3871,11 +3871,11 @@ var outputBlockFormatter = function(block) {
 /**
  * Formats the output of a block to its proper values
  *
- * @method outputEpochStats
- * @param {Object} block
+ * @method outputEpochStatsFormatter
+ * @param {Object} epoch stats data
  * @returns {Object}
  */
-var outputEpochStats = function(data) {
+var outputEpochStatsFormatter = function(data) {
 
   // transform to number
   data.epoch = utils.toDecimal(data.epoch);
@@ -4007,7 +4007,8 @@ module.exports = {
     outputBlockFormatter: outputBlockFormatter,
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
-    outputSyncingFormatter: outputSyncingFormatter
+    outputSyncingFormatter: outputSyncingFormatter,
+    outputEpochStatsFormatter: outputEpochStatsFormatter
 };
 
 
@@ -5513,7 +5514,7 @@ var methods = function () {
         name: 'getEpochStats',
         call: 'ftm_getEpochStats',
         params: 1,
-        outputFormatter: outputEpochStats
+        outputFormatter: formatters.outputEpochStatsFormatter
     });
 
     return [
