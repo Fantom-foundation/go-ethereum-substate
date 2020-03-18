@@ -5494,7 +5494,8 @@ var methods = function () {
     var getHeads = new Method({
         name: 'getHeads',
         call: 'ftm_getHeads',
-        params: 1
+        params: 1,
+        inputFormatter: [formatters.inputBlockNumberFormatter]
     });
 
     var getConsensusTime = new Method({
@@ -5508,12 +5509,14 @@ var methods = function () {
         name: 'currentEpoch',
         call: 'ftm_currentEpoch',
         params: 0
+        outputFormatter: utils.toDecimal
     });
 
     var getEpochStats = new Method({
         name: 'getEpochStats',
         call: 'ftm_getEpochStats',
         params: 1,
+        inputFormatter: [formatters.inputBlockNumberFormatter],
         outputFormatter: formatters.outputEpochStatsFormatter
     });
 
