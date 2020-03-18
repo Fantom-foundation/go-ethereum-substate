@@ -5479,7 +5479,8 @@ var methods = function () {
     var getConsensusTime = new Method({
         name: 'getConsensusTime',
         call: 'ftm_getConsensusTime',
-        params: 1
+        params: 1,
+        outputFormatter: utils.toDecimal
     });
 
     var currentEpoch = new Method({
