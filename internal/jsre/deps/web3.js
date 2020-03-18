@@ -3869,6 +3869,26 @@ var outputBlockFormatter = function(block) {
 };
 
 /**
+ * Formats the output of a block to its proper values
+ *
+ * @method outputEpochStats
+ * @param {Object} block
+ * @returns {Object}
+ */
+var outputEpochStats = function(data) {
+
+  // transform to number
+  data.epoch = utils.toDecimal(data.epoch);
+  data.start = utils.toDecimal(data.start);
+  data.end = utils.toDecimal(data.end);
+  data.totalBaseRewardWeight = utils.toBigNumber(data.totalBaseRewardWeight);
+  data.totalFee = utils.toBigNumber(data.totalFee);
+  data.totalTxRewardWeight = utils.toBigNumber(data.totalTxRewardWeight);
+
+  return data;
+};
+
+/**
  * Formats the output of a log
  *
  * @method outputLogFormatter
@@ -5492,7 +5512,8 @@ var methods = function () {
     var getEpochStats = new Method({
         name: 'getEpochStats',
         call: 'ftm_getEpochStats',
-        params: 1
+        params: 1,
+        outputFormatter: outputEpochStats
     });
 
     return [
