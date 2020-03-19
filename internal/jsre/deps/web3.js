@@ -5520,138 +5520,83 @@ var methods = function () {
         outputFormatter: formatters.outputEpochStatsFormatter
     });
 
-    var headerByNumber = new Method({
-        name: 'headerByNumber',
-        call: 'ftm_headerByNumber',
-        params: 1,
-        inputFormatter: [formatters.inputBlockNumberFormatter],
-    });
-
-    var headerByHash = new Method({
-        name: 'headerByHash',
-        call: 'ftm_headerByHash',
-        params: 1,
-        inputFormatter: [utils.toHex],
-    });
-
-    var stateAndHeaderByNumber = new Method({
-        name: 'stateAndHeaderByNumber',
-        call: 'ftm_stateAndHeaderByNumber',
-        params: 1,
-        inputFormatter: [formatters.inputBlockNumberFormatter],
-    });
-
-    var getValidators = new Method({
-        name: 'getValidators',
-        call: 'ftm_getValidators',
-        params: 0,
-    });
-
-    var getReceiptsByNumber = new Method({
-        name: 'getReceiptsByNumber',
-        call: 'ftm_getReceiptsByNumber',
-        params: 1,
-        inputFormatter: [formatters.inputBlockNumberFormatter],
-    });
-
-    var getReceipts = new Method({
-        name: 'getReceipts',
-        call: 'ftm_getReceipts',
-        params: 1,
-        inputFormatter: [utils.toHex],
-    });
-
-    var getPoolNonce = new Method({
-        name: 'getPoolNonce',
-        call: 'ftm_getPoolNonce',
-        params: 1,
-        inputFormatter: [utils.toHex],
-    });
-
-    var suggestPrice = new Method({
-        name: 'suggestPrice',
-        call: 'ftm_suggestPrice',
-        params: 0,
-    });
-
     var getValidationScore = new Method({
         name: 'getValidationScore',
-        call: 'ftm_getValidationScore',
+        call: 'sfc_getValidationScore',
         params: 1,
-        inputFormatter: [utils.toDecimal],
+        inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
     var getOriginationScore = new Method({
         name: 'getOriginationScore',
-        call: 'ftm_getOriginationScore',
+        call: 'sfc_getOriginationScore',
         params: 1,
-        inputFormatter: [utils.toDecimal],
+        inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
     var getStakerPoI = new Method({
         name: 'getStakerPoI',
-        call: 'ftm_getStakerPoI',
+        call: 'sfc_getStakerPoI',
         params: 1,
-        inputFormatter: [utils.toDecimal],
+        inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
     var getRewardWeights = new Method({
         name: 'getRewardWeights',
-        call: 'ftm_getRewardWeights',
+        call: 'sfc_getRewardWeights',
         params: 1,
-        inputFormatter: [utils.toDecimal],
-        outputFormatter: [formatters.outputBigNumberFormatter, formatters.outputBigNumberFormatter]
+        inputFormatter: [utils.toHex],
+        outputFormatter: formatters.outputBigNumberFormatter
     });
 
     var getDowntime = new Method({
         name: 'getDowntime',
-        call: 'ftm_getDowntime',
+        call: 'sfc_getDowntime',
         params: 1,
-        inputFormatter: [utils.toDecimal],
-        outputFormatter: [utils.toDecimal, utils.toDecimal]
+        inputFormatter: [utils.toHex]
     });
 
     var getStaker = new Method({
         name: 'getStaker',
-        call: 'ftm_getStaker',
-        params: 1,
-        inputFormatter: [utils.toDecimal],
+        call: 'sfc_getStaker',
+        params: 2,
+        inputFormatter: [utils.toHex, utils.toHex]
     });
 
-    var getStakerID = new Method({
-        name: 'getStakerID',
-        call: 'ftm_getStakerID',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: utils.toDecimal
+    var getStakerByAddress = new Method({
+        name: 'getStakerByAddress',
+        call: 'sfc_getStakerByAddress',
+        params: 2,
+        inputFormatter: [utils.toHex, utils.toHex]
     });
 
     var getStakers = new Method({
         name: 'getStakers',
-        call: 'ftm_getStakers',
-        params: 0,
+        call: 'sfc_getStakers',
+        params: 1,
+        inputFormatter: [utils.toHex]
     });
 
     var getDelegatorsOf = new Method({
         name: 'getDelegatorsOf',
-        call: 'ftm_getDelegatorsOf',
-        params: 1,
-        inputFormatter: [utils.toDecimal],
+        call: 'sfc_getDelegatorsOf',
+        params: 2,
+        inputFormatter: [utils.toHex, utils.toHex]
     });
 
     var getDelegator = new Method({
         name: 'getDelegator',
-        call: 'ftm_getDelegator',
-        params: 1,
-        inputFormatter: [utils.toHex],
+        call: 'sfc_getDelegator',
+        params: 2,
+        inputFormatter: [utils.toHex, utils.toHex]
     });
 
     var getDelegatorClaimedRewards = new Method({
         name: 'getDelegatorClaimedRewards',
-        call: 'ftm_getDelegatorClaimedRewards',
+        call: 'sfc_getDelegatorClaimedRewards',
         params: 1,
         inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
@@ -5659,40 +5604,39 @@ var methods = function () {
 
     var getStakerClaimedRewards = new Method({
         name: 'getStakerClaimedRewards',
-        call: 'ftm_getStakerClaimedRewards',
+        call: 'sfc_getStakerClaimedRewards',
         params: 1,
-        inputFormatter: [utils.toDecimal],
+        inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
     var getStakerDelegatorsClaimedRewards = new Method({
         name: 'getStakerDelegatorsClaimedRewards',
-        call: 'ftm_getStakerDelegatorsClaimedRewards',
+        call: 'sfc_getStakerDelegatorsClaimedRewards',
         params: 1,
-        inputFormatter: [utils.toDecimal],
+        inputFormatter: [utils.toHex],
         outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getEventTime = new Method({
-        name: 'getEventTime',
-        call: 'ftm_getEventTime',
-        params: 1,
-        inputFormatter: [utils.toHex, null],
-        outputFormatter: utils.toDecimal
     });
 
     var ttfReport = new Method({
         name: 'ttfReport',
-        call: 'ftm_ttfReport',
-        params: 3,
-        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toDecimal, null],
+        call: 'debug_ttfReport',
+        params: 4,
+        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ]
     });
 
     var validatorTimeDrifts = new Method({
         name: 'validatorTimeDrifts',
-        call: 'ftm_validatorTimeDrifts',
+        call: 'debug_validatorTimeDrifts',
+        params: 3,
+        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex]
+    });
+
+    var validatorVersions = new Method({
+        name: 'validatorVersions',
+        call: 'debug_validatorVersions',
         params: 2,
-        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toDecimal],
+        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex]
     });
 
     return [
@@ -5725,30 +5669,22 @@ var methods = function () {
         getConsensusTime,
         currentEpoch,
         getEpochStats,
-        headerByNumber,
-        headerByHash,
-        stateAndHeaderByNumber,
-        getValidators,
-        getReceiptsByNumber,
-        getReceipts,
-        getPoolNonce,
-        suggestPrice,
         getValidationScore,
         getOriginationScore,
         getStakerPoI,
         getRewardWeights,
         getDowntime,
         getStaker,
-        getStakerID,
+        getStakerByAddress,
         getStakers,
         getDelegatorsOf,
         getDelegator,
         getDelegatorClaimedRewards,
         getStakerClaimedRewards,
         getStakerDelegatorsClaimedRewards,
-        getEventTime,
         ttfReport,
-        validatorTimeDrifts
+        validatorTimeDrifts,
+        validatorVersions
     ];
 };
 
