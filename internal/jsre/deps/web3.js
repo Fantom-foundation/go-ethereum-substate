@@ -3918,7 +3918,7 @@ var outputValidatorTimeDriftsFormatter = function(data) {
     Object.keys(data).forEach(function(k){
         data[k].stats.samples = utils.toDecimal(data[k].stats.samples);
 
-        if (data[k].has('histogram') && utils.isArray(data[k].histogram)) {
+        if (data[k].hasOwnProperty('histogram') && utils.isArray(data[k].histogram)) {
             data[k].histogram.forEach(function(item) {
                 item.count = utils.toDecimal(item.count);
                 return item
