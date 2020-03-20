@@ -2541,6 +2541,7 @@ module.exports={
 var RequestManager = require('./web3/requestmanager');
 var Iban = require('./web3/iban');
 var Ftm = require('./web3/methods/ftm');
+var Debug = require('./web3/methods/debug');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2563,6 +2564,7 @@ function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
     this.ftm = new Ftm(this);
+    this.debug = new Debug(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -5618,27 +5620,6 @@ var methods = function () {
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
-    var ttfReport = new Method({
-        name: 'ttfReport',
-        call: 'debug_ttfReport',
-        params: 4,
-        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ]
-    });
-
-    var validatorTimeDrifts = new Method({
-        name: 'validatorTimeDrifts',
-        call: 'debug_validatorTimeDrifts',
-        params: 3,
-        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex]
-    });
-
-    var validatorVersions = new Method({
-        name: 'validatorVersions',
-        call: 'debug_validatorVersions',
-        params: 2,
-        inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex]
-    });
-
     return [
         getBalance,
         getStorageAt,
@@ -5681,10 +5662,7 @@ var methods = function () {
         getDelegator,
         getDelegatorClaimedRewards,
         getStakerClaimedRewards,
-        getStakerDelegatorsClaimedRewards,
-        ttfReport,
-        validatorTimeDrifts,
-        validatorVersions
+        getStakerDelegatorsClaimedRewards
     ];
 };
 
@@ -5748,6 +5726,100 @@ Ftm.prototype.isSyncing = function (callback) {
 };
 
 module.exports = Ftm;
+
+},{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],380:[function(require,module,exports){
+/*
+      This file is part of web3.js.
+
+      web3.js is free software: you can redistribute it and/or modify
+      it under the terms of the GNU Lesser General Public License as published by
+      the Free Software Foundation, either version 3 of the License, or
+      (at your option) any later version.
+
+      web3.js is distributed in the hope that it will be useful,
+      but WITHOUT ANY WARRANTY; without even the implied warranty of
+      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+      GNU Lesser General Public License for more details.
+
+      You should have received a copy of the GNU Lesser General Public License
+      along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @file debug.js
+ * @author Marek Kotewicz <marek@ethdev.com>
+ * @author Fabian Vogelsteller <fabian@ethdev.com>
+ * @date 2015
+ */
+
+"use strict";
+
+var formatters = require('../formatters');
+var utils = require('../../utils/utils');
+var Method = require('../method');
+var Property = require('../property');
+var c = require('../../utils/config');
+var Contract = require('../contract');
+var watches = require('./watches');
+var Filter = require('../filter');
+var IsSyncing = require('../syncing');
+var namereg = require('../namereg');
+var Iban = require('../iban');
+var transfer = require('../transfer');
+
+function Debug(web3) {
+  this._requestManager = web3._requestManager;
+
+  var self = this;
+
+  methods().forEach(function(method) {
+    method.attachToObject(self);
+    method.setRequestManager(self._requestManager);
+  });
+
+  properties().forEach(function(p) {
+    p.attachToObject(self);
+    p.setRequestManager(self._requestManager);
+  });
+
+
+  this.iban = Iban;
+  this.sendIBANTransaction = transfer.bind(null, this);
+}
+
+var methods = function () {
+  var ttfReport = new Method({
+    name: 'ttfReport',
+    call: 'debug_ttfReport',
+    params: 4,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ]
+  });
+
+  var validatorTimeDrifts = new Method({
+    name: 'validatorTimeDrifts',
+    call: 'debug_validatorTimeDrifts',
+    params: 3,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex]
+  });
+
+  var validatorVersions = new Method({
+    name: 'validatorVersions',
+    call: 'debug_validatorVersions',
+    params: 2,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex]
+  });
+
+  return [
+    ttfReport,
+    validatorTimeDrifts,
+    validatorVersions
+  ];
+};
+
+var properties = function () {
+  return [];
+};
+
+module.exports = Debug;
 
 },{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],39:[function(require,module,exports){
 /*
