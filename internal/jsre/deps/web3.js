@@ -5512,7 +5512,7 @@ var methods = function () {
     var currentEpoch = new Method({
         name: 'currentEpoch',
         call: 'ftm_currentEpoch',
-        params: 0
+        params: 0,
         outputFormatter: utils.toDecimal
     });
 
@@ -5678,6 +5678,8 @@ function Debug(web3) {
 }
 
 var methods = function () {
+  // Output formaters for 'samples' and 'count'?
+
   var ttfReport = new Method({
     name: 'ttfReport',
     call: 'debug_ttfReport',
@@ -5801,8 +5803,7 @@ var methods = function () {
       name: 'getRewardWeights',
       call: 'sfc_getRewardWeights',
       params: 1,
-      inputFormatter: [utils.toHex],
-      outputFormatter: formatters.outputBigNumberFormatter
+      inputFormatter: [utils.toHex]
     });
 
     var getDowntime = new Method({
