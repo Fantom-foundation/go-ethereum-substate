@@ -3902,6 +3902,23 @@ var outputEpochStatsFormatter = function(data) {
   return data;
 };
 
+
+/**
+ * @method outputValidatorTimeDriftsFormatter
+ * @param {Object} validatorTimeDrifts stats data
+ * @returns {Object}
+ */
+var outputHistogramFormatter = function(data) {
+    if (utils.isArray(data)) {
+        data.forEach(function(item) {
+            item.count = utils.toDecimal(item.count);
+            return item
+        })
+    }
+
+    return data;
+};
+
 /**
  * Formats the output of a block to its proper values
  *
@@ -3910,16 +3927,18 @@ var outputEpochStatsFormatter = function(data) {
  * @returns {Object}
  */
 var outputTtfReportFormatter = function(data) {
-
     // transform to number
     data.stats.samples = utils.toDecimal(data.stats.samples);
+
+    // histogram
+    if (data.hasOwnProperty('histogram') && utils.isArray(data.histogram)) {
+        data.histogram = outputHistogramFormatter(data.histogram)
+    }
 
     return data;
 };
 
 /**
- * Formats the output of a block to its proper values
- *
  * @method outputValidatorTimeDriftsFormatter
  * @param {Object} validatorTimeDrifts stats data
  * @returns {Object}
@@ -3929,10 +3948,7 @@ var outputValidatorTimeDriftsFormatter = function(data) {
         data[k].stats.samples = utils.toDecimal(data[k].stats.samples);
 
         if (data[k].hasOwnProperty('histogram') && utils.isArray(data[k].histogram)) {
-            data[k].histogram.forEach(function(item) {
-                item.count = utils.toDecimal(item.count);
-                return item
-            })
+            data[k].histogram = outputHistogramFormatter(data[k].histogram)
         }
     });
 
