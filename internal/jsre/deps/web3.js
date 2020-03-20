@@ -3927,7 +3927,7 @@ var outputStakerFormatter = function(data) {
 var outputStakersFormatter = function(data) {
     if (utils.isArray(data)) {
         data.forEach(function(item) {
-          if (!isString(item)) {
+          if (typeof(item) != 'string') {
             item = outputStakerFormatter(item)
           }
           return item
