@@ -3873,8 +3873,6 @@ var outputBlockFormatter = function(block) {
 };
 
 /**
- * Formats the output of a block to its proper values
- *
  * @method outputEpochStatsFormatter
  * @param {Object} epoch stats data
  * @returns {Object}
@@ -3892,11 +3890,57 @@ var outputEpochStatsFormatter = function(data) {
   return data;
 };
 
+/**
+ * @method outputStakerFormatter
+ * @param {Object} staker data
+ * @returns {Object}
+ */
+var outputStakerFormatter = function(data) {
+    data.createdEpoch = utils.toDecimal(data.createdEpoch);
+    data.createdTime = utils.toBigNumber(data.createdTime);
+    data.deactivatedEpoch = utils.toDecimal(data.deactivatedEpoch);
+    data.deactivatedTime = utils.toBigNumber(data.deactivatedTime);
+    data.delegatedMe = utils.toDecimal(data.delegatedMe);
+    data.stake = utils.toBigNumber(data.stake);
+    data.totalStake = utils.toBigNumber(data.totalStake);
+
+    if (data.hasOwnProperty('baseRewardWeight')) {
+        data.baseRewardWeight = utils.toBigNumber(data.baseRewardWeight);
+        data.claimedRewards = utils.toBigNumber(data.claimedRewards);
+        data.delegatorsClaimedRewards = utils.toBigNumber(data.delegatorsClaimedRewards);
+        data.downtime = utils.toBigNumber(data.downtime);
+        data.missedBlocks = utils.toBigNumber(data.missedBlocks);
+        data.originationScore = utils.toBigNumber(data.originationScore);
+        data.poi = utils.toBigNumber(data.poi);
+        data.txRewardWeight = utils.toBigNumber(data.txRewardWeight);
+        data.validationScore = utils.toBigNumber(data.validationScore);
+    };
+
+    return data;
+};
 
 /**
- * @method outputValidatorTimeDriftsFormatter
- * @param {Object} validatorTimeDrifts stats data
+ * @method outputStakersFormatter
+ * @param {Object} stakers data
  * @returns {Object}
+ */
+var outputStakersFormatter = function(data) {
+    if (utils.isArray(data)) {
+        data.forEach(function(item) {
+          if (!isString(item)) {
+            item = outputStakerFormatter(item)
+          }
+          return item
+        })
+    };
+
+    return data;
+};
+
+/**
+ * @method outputHistogramFormatter
+ * @param {Array} histogram data
+ * @returns {Array}
  */
 var outputHistogramFormatter = function(data) {
     if (utils.isArray(data)) {
@@ -3910,8 +3954,19 @@ var outputHistogramFormatter = function(data) {
 };
 
 /**
- * Formats the output of a block to its proper values
- *
+ * @method outputDecimalProperties
+ * @param {Object} data
+ * @returns {Object}
+ */
+var outputDecimalProperties = function(data) {
+    Object.keys(data).forEach(function(k){
+        data[k] = utils.toDecimal(data[k])
+    });
+
+    return data;
+};
+
+/**
  * @method outputTtfReportFormatter
  * @param {Object} ttfReport stats data
  * @returns {Object}
@@ -4067,7 +4122,10 @@ module.exports = {
     outputSyncingFormatter: outputSyncingFormatter,
     outputEpochStatsFormatter: outputEpochStatsFormatter,
     outputTtfReportFormatter: outputTtfReportFormatter,
-    outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter
+    outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter,
+    outputDecimalProperties: outputDecimalProperties,
+    outputStakerFormatter: outputStakerFormatter,
+    outputStakersFormatter: outputStakersFormatter
 };
 
 
@@ -5860,35 +5918,40 @@ var methods = function () {
       name: 'getRewardWeights',
       call: 'sfc_getRewardWeights',
       params: 1,
-      inputFormatter: [utils.toHex]
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputDecimalProperties
     });
 
     var getDowntime = new Method({
       name: 'getDowntime',
       call: 'sfc_getDowntime',
       params: 1,
-      inputFormatter: [utils.toHex]
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputDecimalProperties
     });
 
     var getStaker = new Method({
       name: 'getStaker',
       call: 'sfc_getStaker',
       params: 2,
-      inputFormatter: [utils.toHex, utils.toHex]
+      inputFormatter: [utils.toHex, utils.toHex],
+      outputFormatter: formatters.outputStakerFormatter
     });
 
     var getStakerByAddress = new Method({
       name: 'getStakerByAddress',
       call: 'sfc_getStakerByAddress',
       params: 2,
-      inputFormatter: [utils.toHex, utils.toHex]
+      inputFormatter: [utils.toHex, utils.toHex],
+      outputFormatter: formatters.outputStakerFormatter
     });
 
     var getStakers = new Method({
       name: 'getStakers',
       call: 'sfc_getStakers',
       params: 1,
-      inputFormatter: [utils.toHex]
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputStakersFormatter
     });
 
     var getDelegatorsOf = new Method({
