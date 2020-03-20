@@ -3915,7 +3915,7 @@ var outputTtfReportFormatter = function(data) {
  * @returns {Object}
  */
 var outputValidatorTimeDriftsFormatter = function(data) {
-    data.forEach(function(v, k, m){
+    Object.keys(data).forEach(function(k){
         data[k].stats.samples = utils.toDecimal(data[k].stats.samples);
 
         if (data[k].has('histogram') && utils.isArray(data[k].histogram)) {
