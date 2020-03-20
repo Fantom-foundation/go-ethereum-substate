@@ -2542,6 +2542,7 @@ var RequestManager = require('./web3/requestmanager');
 var Iban = require('./web3/iban');
 var Ftm = require('./web3/methods/ftm');
 var Debug = require('./web3/methods/debug');
+var Sfc = require('./web3/methods/sfc');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2565,6 +2566,7 @@ function Web3 (provider) {
     this.currentProvider = provider;
     this.ftm = new Ftm(this);
     this.debug = new Debug(this);
+    this.sfc = new Sfc(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -2661,7 +2663,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/sfc":381,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -5522,104 +5524,6 @@ var methods = function () {
         outputFormatter: formatters.outputEpochStatsFormatter
     });
 
-    var getValidationScore = new Method({
-        name: 'getValidationScore',
-        call: 'sfc_getValidationScore',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getOriginationScore = new Method({
-        name: 'getOriginationScore',
-        call: 'sfc_getOriginationScore',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getStakerPoI = new Method({
-        name: 'getStakerPoI',
-        call: 'sfc_getStakerPoI',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getRewardWeights = new Method({
-        name: 'getRewardWeights',
-        call: 'sfc_getRewardWeights',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getDowntime = new Method({
-        name: 'getDowntime',
-        call: 'sfc_getDowntime',
-        params: 1,
-        inputFormatter: [utils.toHex]
-    });
-
-    var getStaker = new Method({
-        name: 'getStaker',
-        call: 'sfc_getStaker',
-        params: 2,
-        inputFormatter: [utils.toHex, utils.toHex]
-    });
-
-    var getStakerByAddress = new Method({
-        name: 'getStakerByAddress',
-        call: 'sfc_getStakerByAddress',
-        params: 2,
-        inputFormatter: [utils.toHex, utils.toHex]
-    });
-
-    var getStakers = new Method({
-        name: 'getStakers',
-        call: 'sfc_getStakers',
-        params: 1,
-        inputFormatter: [utils.toHex]
-    });
-
-    var getDelegatorsOf = new Method({
-        name: 'getDelegatorsOf',
-        call: 'sfc_getDelegatorsOf',
-        params: 2,
-        inputFormatter: [utils.toHex, utils.toHex]
-    });
-
-    var getDelegator = new Method({
-        name: 'getDelegator',
-        call: 'sfc_getDelegator',
-        params: 2,
-        inputFormatter: [utils.toHex, utils.toHex]
-    });
-
-    var getDelegatorClaimedRewards = new Method({
-        name: 'getDelegatorClaimedRewards',
-        call: 'sfc_getDelegatorClaimedRewards',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getStakerClaimedRewards = new Method({
-        name: 'getStakerClaimedRewards',
-        call: 'sfc_getStakerClaimedRewards',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
-    var getStakerDelegatorsClaimedRewards = new Method({
-        name: 'getStakerDelegatorsClaimedRewards',
-        call: 'sfc_getStakerDelegatorsClaimedRewards',
-        params: 1,
-        inputFormatter: [utils.toHex],
-        outputFormatter: formatters.outputBigNumberFormatter
-    });
-
     return [
         getBalance,
         getStorageAt,
@@ -5649,20 +5553,7 @@ var methods = function () {
         getHeads,
         getConsensusTime,
         currentEpoch,
-        getEpochStats,
-        getValidationScore,
-        getOriginationScore,
-        getStakerPoI,
-        getRewardWeights,
-        getDowntime,
-        getStaker,
-        getStakerByAddress,
-        getStakers,
-        getDelegatorsOf,
-        getDelegator,
-        getDelegatorClaimedRewards,
-        getStakerClaimedRewards,
-        getStakerDelegatorsClaimedRewards
+        getEpochStats
     ];
 };
 
@@ -5820,6 +5711,188 @@ var properties = function () {
 };
 
 module.exports = Debug;
+
+},{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],381:[function(require,module,exports){
+/*
+      This file is part of web3.js.
+
+      web3.js is free software: you can redistribute it and/or modify
+      it under the terms of the GNU Lesser General Public License as published by
+      the Free Software Foundation, either version 3 of the License, or
+      (at your option) any later version.
+
+      web3.js is distributed in the hope that it will be useful,
+      but WITHOUT ANY WARRANTY; without even the implied warranty of
+      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+      GNU Lesser General Public License for more details.
+
+      You should have received a copy of the GNU Lesser General Public License
+      along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+*/
+/**
+ * @file sfc.js
+ * @author Marek Kotewicz <marek@ethdev.com>
+ * @author Fabian Vogelsteller <fabian@ethdev.com>
+ * @date 2015
+ */
+
+"use strict";
+
+var formatters = require('../formatters');
+var utils = require('../../utils/utils');
+var Method = require('../method');
+var Property = require('../property');
+var c = require('../../utils/config');
+var Contract = require('../contract');
+var watches = require('./watches');
+var Filter = require('../filter');
+var IsSyncing = require('../syncing');
+var namereg = require('../namereg');
+var Iban = require('../iban');
+var transfer = require('../transfer');
+
+function Sfc(web3) {
+    this._requestManager = web3._requestManager;
+
+    var self = this;
+
+    methods().forEach(function(method) {
+      method.attachToObject(self);
+      method.setRequestManager(self._requestManager);
+    });
+
+    properties().forEach(function(p) {
+      p.attachToObject(self);
+      p.setRequestManager(self._requestManager);
+    });
+
+
+    this.iban = Iban;
+    this.sendIBANTransaction = transfer.bind(null, this);
+}
+
+var methods = function () {
+
+    var getValidationScore = new Method({
+      name: 'getValidationScore',
+      call: 'sfc_getValidationScore',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getOriginationScore = new Method({
+      name: 'getOriginationScore',
+      call: 'sfc_getOriginationScore',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getStakerPoI = new Method({
+      name: 'getStakerPoI',
+      call: 'sfc_getStakerPoI',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getRewardWeights = new Method({
+      name: 'getRewardWeights',
+      call: 'sfc_getRewardWeights',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getDowntime = new Method({
+      name: 'getDowntime',
+      call: 'sfc_getDowntime',
+      params: 1,
+      inputFormatter: [utils.toHex]
+    });
+
+    var getStaker = new Method({
+      name: 'getStaker',
+      call: 'sfc_getStaker',
+      params: 2,
+      inputFormatter: [utils.toHex, utils.toHex]
+    });
+
+    var getStakerByAddress = new Method({
+      name: 'getStakerByAddress',
+      call: 'sfc_getStakerByAddress',
+      params: 2,
+      inputFormatter: [utils.toHex, utils.toHex]
+    });
+
+    var getStakers = new Method({
+      name: 'getStakers',
+      call: 'sfc_getStakers',
+      params: 1,
+      inputFormatter: [utils.toHex]
+    });
+
+    var getDelegatorsOf = new Method({
+      name: 'getDelegatorsOf',
+      call: 'sfc_getDelegatorsOf',
+      params: 2,
+      inputFormatter: [utils.toHex, utils.toHex]
+    });
+
+    var getDelegator = new Method({
+      name: 'getDelegator',
+      call: 'sfc_getDelegator',
+      params: 2,
+      inputFormatter: [utils.toHex, utils.toHex]
+    });
+
+    var getDelegatorClaimedRewards = new Method({
+      name: 'getDelegatorClaimedRewards',
+      call: 'sfc_getDelegatorClaimedRewards',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getStakerClaimedRewards = new Method({
+      name: 'getStakerClaimedRewards',
+      call: 'sfc_getStakerClaimedRewards',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getStakerDelegatorsClaimedRewards = new Method({
+      name: 'getStakerDelegatorsClaimedRewards',
+      call: 'sfc_getStakerDelegatorsClaimedRewards',
+      params: 1,
+      inputFormatter: [utils.toHex],
+      outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    return [
+      getValidationScore,
+      getOriginationScore,
+      getStakerPoI,
+      getRewardWeights,
+      getDowntime,
+      getStaker,
+      getStakerByAddress,
+      getStakers,
+      getDelegatorsOf,
+      getDelegator,
+      getDelegatorClaimedRewards,
+      getStakerClaimedRewards,
+      getStakerDelegatorsClaimedRewards
+    ];
+};
+
+var properties = function () {
+    return [];
+};
+
+module.exports = Sfc;
 
 },{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],39:[function(require,module,exports){
 /*
