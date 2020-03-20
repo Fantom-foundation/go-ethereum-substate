@@ -3893,6 +3893,43 @@ var outputEpochStatsFormatter = function(data) {
 };
 
 /**
+ * Formats the output of a block to its proper values
+ *
+ * @method outputTtfReportFormatter
+ * @param {Object} ttfReport stats data
+ * @returns {Object}
+ */
+var outputTtfReportFormatter = function(data) {
+
+    // transform to number
+    data.stats.samples = utils.toDecimal(data.stats.samples);
+
+    return data;
+};
+
+/**
+ * Formats the output of a block to its proper values
+ *
+ * @method outputValidatorTimeDriftsFormatter
+ * @param {Object} validatorTimeDrifts stats data
+ * @returns {Object}
+ */
+var outputValidatorTimeDriftsFormatter = function(data) {
+    data.forEach(function(v, k, m){
+        data[k].stats.samples = utils.toDecimal(data[k].stats.samples);
+
+        if (data[k].has('histogram') && utils.isArray(data[k].histogram)) {
+            data[k].histogram.forEach(function(item) {
+                item.count = utils.toDecimal(item.count);
+                return item
+            })
+        }
+    });
+
+    return data;
+};
+
+/**
  * Formats the output of a log
  *
  * @method outputLogFormatter
@@ -4012,7 +4049,9 @@ module.exports = {
     outputLogFormatter: outputLogFormatter,
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter,
-    outputEpochStatsFormatter: outputEpochStatsFormatter
+    outputEpochStatsFormatter: outputEpochStatsFormatter,
+    outputTtfReportFormatter: outputTtfReportFormatter,
+    outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter
 };
 
 
@@ -5685,6 +5724,7 @@ var methods = function () {
     call: 'debug_ttfReport',
     params: 4,
     inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ]
+    outputFormatter: formatters.outputTtfReportFormatter
   });
 
   var validatorTimeDrifts = new Method({
@@ -5692,6 +5732,7 @@ var methods = function () {
     call: 'debug_validatorTimeDrifts',
     params: 3,
     inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex]
+    outputFormatter: formatters.outputValidatorTimeDriftsFormatter
   });
 
   var validatorVersions = new Method({
