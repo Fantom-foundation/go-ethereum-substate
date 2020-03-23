@@ -3906,6 +3906,7 @@ var outputEpochStatsFormatter = function(data) {
  * @returns {Object}
  */
 var outputStakerFormatter = function(data) {
+    data.id = utils.toDecimal(data.id);
     data.createdEpoch = utils.toDecimal(data.createdEpoch);
     data.createdTime = utils.toBigNumber(data.createdTime);
     data.deactivatedEpoch = utils.toDecimal(data.deactivatedEpoch);
@@ -3939,6 +3940,8 @@ var outputStakersFormatter = function(data) {
         data.forEach(function(item) {
           if (typeof(item) != 'string') {
             item = outputStakerFormatter(item)
+          } else {
+            item = utils.toDecimal(item)
           }
           return item
         })
