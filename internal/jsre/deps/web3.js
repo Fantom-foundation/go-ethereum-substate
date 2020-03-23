@@ -3941,6 +3941,44 @@ var outputStakersFormatter = function(data) {
 };
 
 /**
+ * @method outputDelegatorFormatter
+ * @param {Object} staker data
+ * @returns {Object}
+ */
+var outputDelegatorFormatter = function(data) {
+    data.toStakerID = utils.toDecimal(data.toStakerID);
+    data.amount = utils.toBigNumber(data.amount);
+    data.createdEpoch = utils.toDecimal(data.createdEpoch);
+    data.createdTime = utils.toBigNumber(data.createdTime);
+    data.deactivatedEpoch = utils.toDecimal(data.deactivatedEpoch);
+    data.deactivatedTime = utils.toBigNumber(data.deactivatedTime);
+
+    if (data.hasOwnProperty('claimedRewards')) {
+        data.claimedRewards = utils.toBigNumber(data.claimedRewards);
+    }
+
+    return data;
+};
+
+/**
+ * @method outputDelegatorsFormatter
+ * @param {Object} delegators data
+ * @returns {Object}
+ */
+var outputDelegatorsFormatter = function(data) {
+    if (utils.isArray(data)) {
+        data.forEach(function(item) {
+            if (typeof(item) != 'string') {
+              item = outputDelegatorFormatter(item)
+            }
+            return item
+        })
+    }
+
+    return data;
+};
+
+/**
  * @method outputHistogramFormatter
  * @param {Array} histogram data
  * @returns {Array}
@@ -4143,7 +4181,9 @@ module.exports = {
     outputDecimalProperties: outputDecimalProperties,
     outputStakerFormatter: outputStakerFormatter,
     outputStakersFormatter: outputStakersFormatter,
-    outputKeysToDecimal: outputKeysToDecimal
+    outputKeysToDecimal: outputKeysToDecimal,
+    outputDelegatorFormatter: outputDelegatorFormatter,
+    outputDelegatorsFormatter: outputDelegatorsFormatter
 };
 
 
@@ -5978,14 +6018,16 @@ var methods = function () {
       name: 'getDelegatorsOf',
       call: 'sfc_getDelegatorsOf',
       params: 2,
-      inputFormatter: [utils.toHex, utils.toHex]
+      inputFormatter: [utils.toHex, utils.toHex],
+      outputFormatter: formatters.outputDelegatorsFormatter
     });
 
     var getDelegator = new Method({
       name: 'getDelegator',
       call: 'sfc_getDelegator',
       params: 2,
-      inputFormatter: [utils.toHex, utils.toHex]
+      inputFormatter: [utils.toHex, utils.toHex],
+      outputFormatter: formatters.outputDelegatorFormatter
     });
 
     var getDelegatorClaimedRewards = new Method({
