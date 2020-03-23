@@ -3997,6 +3997,20 @@ var outputTtfReportFormatter = function(data) {
 };
 
 /**
+ * @method outputKeysToDecimal
+ * @param {Object} data
+ * @returns {Object}
+ */
+var outputKeysToDecimal = function(data) {
+    var newData = new Object();
+    Object.keys(data).forEach(function(k){
+      newData[utils.toDecimal(k)] = data[k]
+    });
+
+    return newData;
+};
+
+/**
  * @method outputValidatorTimeDriftsFormatter
  * @param {Object} validatorTimeDrifts stats data
  * @returns {Object}
@@ -4010,7 +4024,7 @@ var outputValidatorTimeDriftsFormatter = function(data) {
         }
     });
 
-    return data;
+    return outputKeysToDecimal(data);
 };
 
 /**
@@ -4138,7 +4152,8 @@ module.exports = {
     outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter,
     outputDecimalProperties: outputDecimalProperties,
     outputStakerFormatter: outputStakerFormatter,
-    outputStakersFormatter: outputStakersFormatter
+    outputStakersFormatter: outputStakersFormatter,
+    outputKeysToDecimal: outputKeysToDecimal
 };
 
 
@@ -5827,6 +5842,7 @@ var methods = function () {
     call: 'debug_validatorVersions',
     params: 2,
     inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex]
+    outputFormatter: formatters.outputKeysToDecimal
   });
 
   return [
