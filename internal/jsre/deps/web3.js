@@ -5850,7 +5850,8 @@ module.exports = Debug;
  * @file sfc.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
- * @date 2015
+ * @author devintegral3 <devintegral3@sfxdx.ru>
+ * @date 2020
  */
 
 "use strict";
