@@ -3928,13 +3928,12 @@ var outputStakerFormatter = function(data) {
  */
 var outputStakersFormatter = function(data) {
     if (utils.isArray(data)) {
-        data.forEach(function(item) {
+        data.forEach(function(item, i) {
           if (typeof(item) != 'string') {
-            item = outputStakerFormatter(item)
+            data[i] = outputStakerFormatter(item)
           } else {
-            item = utils.toDecimal(item)
+            data[i] = utils.toDecimal(item)
           }
-          return item
         })
     };
 
