@@ -3919,7 +3919,7 @@ var outputStakerFormatter = function(data) {
     if (data.hasOwnProperty('baseRewardWeight')) {
         data.baseRewardWeight = utils.toBigNumber(data.baseRewardWeight);
         data.claimedRewards = utils.toBigNumber(data.claimedRewards);
-        data.delegatorsClaimedRewards = utils.toBigNumber(data.delegatorsClaimedRewards);
+        data.delegationsClaimedRewards = utils.toBigNumber(data.delegationsClaimedRewards);
         data.downtime = utils.toBigNumber(data.downtime);
         data.missedBlocks = utils.toBigNumber(data.missedBlocks);
         data.originationScore = utils.toBigNumber(data.originationScore);
@@ -3951,11 +3951,11 @@ var outputStakersFormatter = function(data) {
 };
 
 /**
- * @method outputDelegatorFormatter
+ * @method outputDelegationFormatter
  * @param {Object} staker data
  * @returns {Object}
  */
-var outputDelegatorFormatter = function(data) {
+var outputDelegationFormatter = function(data) {
     data.toStakerID = utils.toDecimal(data.toStakerID);
     data.amount = utils.toBigNumber(data.amount);
     data.createdEpoch = utils.toDecimal(data.createdEpoch);
@@ -3971,11 +3971,11 @@ var outputDelegatorFormatter = function(data) {
 };
 
 /**
- * @method outputDelegatorsFormatter
- * @param {Object} delegators data
+ * @method outputDelegationsFormatter
+ * @param {Object} delegations data
  * @returns {Object}
  */
-var outputDelegatorsFormatter = function(data) {
+var outputDelegationsFormatter = function(data) {
     if (utils.isArray(data)) {
         data.forEach(function(item, i) {
             if (typeof(item) != 'string') {
@@ -6084,27 +6084,35 @@ var methods = function () {
       outputFormatter: formatters.outputStakersFormatter
     });
 
-    var getDelegatorsOf = new Method({
-      name: 'getDelegatorsOf',
-      call: 'sfc_getDelegatorsOf',
+    var getDelegationsOf = new Method({
+      name: 'getDelegationsOf',
+      call: 'sfc_getDelegationsOf',
       params: 2,
       inputFormatter: [utils.toHex, utils.toHex],
-      outputFormatter: formatters.outputDelegatorsFormatter
+      outputFormatter: formatters.outputDelegationsFormatter
     });
 
-    var getDelegator = new Method({
-      name: 'getDelegator',
-      call: 'sfc_getDelegator',
+    var getDelegationsByAddress = new Method({
+      name: 'getDelegationsByAddress',
+      call: 'sfc_getDelegationsByAddress',
       params: 2,
       inputFormatter: [utils.toHex, utils.toHex],
-      outputFormatter: formatters.outputDelegatorFormatter
+      outputFormatter: formatters.outputDelegationsFormatter
     });
 
-    var getDelegatorClaimedRewards = new Method({
-      name: 'getDelegatorClaimedRewards',
-      call: 'sfc_getDelegatorClaimedRewards',
-      params: 1,
-      inputFormatter: [utils.toHex],
+    var getDelegation = new Method({
+      name: 'getDelegation',
+      call: 'sfc_getDelegation',
+      params: 3,
+      inputFormatter: [utils.toHex, utils.toHex, utils.toHex],
+      outputFormatter: formatters.outputDelegationFormatter
+    });
+
+    var getDelegationClaimedRewards = new Method({
+      name: 'getDelegationClaimedRewards',
+      call: 'sfc_getDelegationClaimedRewards',
+      params: 2,
+      inputFormatter: [utils.toHex, utils.toHex],
       outputFormatter: formatters.outputBigNumberFormatter
     });
 
@@ -6116,9 +6124,9 @@ var methods = function () {
       outputFormatter: formatters.outputBigNumberFormatter
     });
 
-    var getStakerDelegatorsClaimedRewards = new Method({
-      name: 'getStakerDelegatorsClaimedRewards',
-      call: 'sfc_getStakerDelegatorsClaimedRewards',
+    var getStakerDelegationsClaimedRewards = new Method({
+      name: 'getStakerDelegationsClaimedRewards',
+      call: 'sfc_getStakerDelegationsClaimedRewards',
       params: 1,
       inputFormatter: [utils.toHex],
       outputFormatter: formatters.outputBigNumberFormatter
@@ -6133,11 +6141,12 @@ var methods = function () {
       getStaker,
       getStakerByAddress,
       getStakers,
-      getDelegatorsOf,
-      getDelegator,
-      getDelegatorClaimedRewards,
+      getDelegationsOf,
+      getDelegationsByAddress,
+      getDelegation,
+      getDelegationClaimedRewards,
       getStakerClaimedRewards,
-      getStakerDelegatorsClaimedRewards
+      getStakerDelegationsClaimedRewards
     ];
 };
 
