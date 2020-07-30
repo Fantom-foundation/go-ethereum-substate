@@ -3967,11 +3967,10 @@ var outputDelegatorFormatter = function(data) {
  */
 var outputDelegatorsFormatter = function(data) {
     if (utils.isArray(data)) {
-        data.forEach(function(item) {
+        data.forEach(function(item, i) {
             if (typeof(item) != 'string') {
-              item = outputDelegatorFormatter(item)
+              data[i] = outputDelegationFormatter(item)
             }
-            return item
         })
     }
 
