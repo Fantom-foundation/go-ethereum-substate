@@ -1192,7 +1192,7 @@ module.exports = SolidityTypeInt;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file param.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -1211,7 +1211,7 @@ var SolidityParam = function (value, offset) {
 
 /**
  * This method should be used to get length of params's dynamic part
- * 
+ *
  * @method dynamicPartLength
  * @returns {Number} length of dynamic part (in bytes)
  */
@@ -1239,7 +1239,7 @@ SolidityParam.prototype.withOffset = function (offset) {
  * @param {SolidityParam} result of combination
  */
 SolidityParam.prototype.combine = function (param) {
-    return new SolidityParam(this.value + param.value); 
+    return new SolidityParam(this.value + param.value);
 };
 
 /**
@@ -1271,8 +1271,8 @@ SolidityParam.prototype.offsetAsBytes = function () {
  */
 SolidityParam.prototype.staticPart = function () {
     if (!this.isDynamic()) {
-        return this.value; 
-    } 
+        return this.value;
+    }
     return this.offsetAsBytes();
 };
 
@@ -1304,7 +1304,7 @@ SolidityParam.prototype.encode = function () {
  * @returns {String}
  */
 SolidityParam.encodeList = function (params) {
-    
+
     // updating offsets
     var totalOffset = params.length * 32;
     var offsetParams = params.map(function (param) {
@@ -1746,13 +1746,13 @@ if (typeof XMLHttpRequest === 'undefined') {
 
 /**
  * Utils
- * 
+ *
  * @module utils
  */
 
 /**
  * Utility functions
- * 
+ *
  * @class [utils] config
  * @constructor
  */
@@ -1819,7 +1819,7 @@ module.exports = {
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file sha3.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -2770,7 +2770,7 @@ module.exports = AllSolidityEvents;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file batch.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -2815,7 +2815,7 @@ Batch.prototype.execute = function () {
                 requests[index].callback(null, (requests[index].format ? requests[index].format(result.result) : result.result));
             }
         });
-    }); 
+    });
 };
 
 module.exports = Batch;
@@ -3002,7 +3002,7 @@ var ContractFactory = function (ftm, abi) {
      */
     this.new = function () {
         /*jshint maxcomplexity: 7 */
-        
+
         var contract = new Contract(this.ftm, this.abi);
 
         // parse arguments
@@ -3150,7 +3150,7 @@ module.exports = ContractFactory;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file errors.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -3425,7 +3425,7 @@ var extend = function (web3) {
         }
     };
 
-    ex.formatters = formatters; 
+    ex.formatters = formatters;
     ex.utils = utils;
     ex.Method = Method;
     ex.Property = Property;
@@ -4007,11 +4007,11 @@ var outputDecimalProperties = function(data) {
 };
 
 /**
- * @method outputTtfReportFormatter
- * @param {Object} ttfReport stats data
+ * @method outputBlocksTTFFormatter
+ * @param {Object} blocksTTF stats data
  * @returns {Object}
  */
-var outputTtfReportFormatter = function(data) {
+var outputBlocksTTFFormatter = function(data) {
     // transform to number
     data.stats.samples = utils.toDecimal(data.stats.samples);
 
@@ -4035,6 +4035,47 @@ var outputKeysToDecimal = function(data) {
     });
 
     return newData;
+};
+
+/**
+ * @method outputKeyValuesToDecimal
+ * @param {Object} data
+ * @returns {Object}
+ */
+var outputKeyValuesToDecimal = function(data) {
+    var newData = new Object();
+    Object.keys(data).forEach(function(k){
+      newData[utils.toDecimal(k)] = utils.toDecimal(data[k])
+    });
+
+    return newData;
+};
+
+/**
+ * @method outputBlocksTPSFormatter
+ * @param {Object} data
+ * @returns {Float}
+ */
+var outputBlocksTPSFormatter = function(data) {
+    var minTime = 0;
+    var maxTime = 0;
+    var totalCount = 0;
+    Object.keys(data).forEach(function(k){
+      var time = utils.toDecimal(k);
+      var count = utils.toDecimal(data[k]);
+      if (minTime == 0 || minTime > time) {
+        minTime = time;
+      }
+      if (maxTime == 0 || maxTime < time) {
+        maxTime = time
+      }
+      totalCount += count;
+    });
+    if (maxTime <= minTime) {
+      return 0.0;
+    }
+
+    return totalCount * 1e9 / (maxTime - minTime);
 };
 
 /**
@@ -4175,14 +4216,16 @@ module.exports = {
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter,
     outputEpochStatsFormatter: outputEpochStatsFormatter,
-    outputTtfReportFormatter: outputTtfReportFormatter,
+    outputBlocksTTFFormatter: outputBlocksTTFFormatter,
     outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter,
     outputDecimalProperties: outputDecimalProperties,
     outputStakerFormatter: outputStakerFormatter,
     outputStakersFormatter: outputStakersFormatter,
     outputKeysToDecimal: outputKeysToDecimal,
-    outputDelegatorFormatter: outputDelegatorFormatter,
-    outputDelegatorsFormatter: outputDelegatorsFormatter
+    outputKeyValuesToDecimal: outputKeyValuesToDecimal,
+    outputBlocksTPSFormatter: outputBlocksTPSFormatter,
+    outputDelegationFormatter: outputDelegationFormatter,
+    outputDelegationsFormatter: outputDelegationsFormatter
 };
 
 
@@ -4647,7 +4690,7 @@ module.exports = HttpProvider;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file iban.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -4847,7 +4890,7 @@ Iban.prototype.address = function () {
         var base36 = this._iban.substr(4);
         var asBn = new BigNumber(base36, 36);
         return padLeft(asBn.toString(16), 20);
-    } 
+    }
 
     return '';
 };
@@ -4892,7 +4935,7 @@ var IpcProvider = function (path, net) {
     var _this = this;
     this.responseCallbacks = {};
     this.path = path;
-    
+
     this.connection = net.connect({path: this.path});
 
     this.connection.on('error', function(e){
@@ -4902,7 +4945,7 @@ var IpcProvider = function (path, net) {
 
     this.connection.on('end', function(){
         _this._timeout();
-    }); 
+    });
 
 
     // LISTEN FOR CONNECTION RESPONSES
@@ -4941,7 +4984,7 @@ Will parse the response and make an array out of it.
 IpcProvider.prototype._parseResponse = function(data) {
     var _this = this,
         returnValues = [];
-    
+
     // DE-CHUNKER
     var dechunkedData = data
         .replace(/\}[\n\r]?\{/g,'}|--|{') // }{
@@ -5045,7 +5088,7 @@ IpcProvider.prototype.send = function (payload) {
         try {
             result = JSON.parse(data);
         } catch(e) {
-            throw errors.InvalidResponse(data);                
+            throw errors.InvalidResponse(data);
         }
 
         return result;
@@ -5220,7 +5263,7 @@ Method.prototype.extractCallback = function (args) {
 
 /**
  * Should be called to check if the number of arguments is correct
- * 
+ *
  * @method validateArgs
  * @param {Array} arguments
  * @throws {Error} if it is not
@@ -5233,7 +5276,7 @@ Method.prototype.validateArgs = function (args) {
 
 /**
  * Should be called to format input args of method
- * 
+ *
  * @method formatInput
  * @param {Array}
  * @return {Array}
@@ -5287,7 +5330,7 @@ Method.prototype.attachToObject = function (obj) {
         obj[name[0]] = obj[name[0]] || {};
         obj[name[0]][name[1]] = func;
     } else {
-        obj[name[0]] = func; 
+        obj[name[0]] = func;
     }
 };
 
@@ -5350,8 +5393,8 @@ var DB = function (web3) {
     this._requestManager = web3._requestManager;
 
     var self = this;
-    
-    methods().forEach(function(method) { 
+
+    methods().forEach(function(method) {
         method.attachToObject(self);
         method.setRequestManager(web3._requestManager);
     });
@@ -5850,19 +5893,11 @@ function Debug(web3) {
 var methods = function () {
   // Output formaters for 'samples' and 'count'?
 
-  var ttfReport = new Method({
-    name: 'ttfReport',
-    call: 'debug_ttfReport',
-    params: 4,
-    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ]
-    outputFormatter: formatters.outputTtfReportFormatter
-  });
-
   var validatorTimeDrifts = new Method({
     name: 'validatorTimeDrifts',
     call: 'debug_validatorTimeDrifts',
     params: 3,
-    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex]
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, utils.toHex],
     outputFormatter: formatters.outputValidatorTimeDriftsFormatter
   });
 
@@ -5870,14 +5905,40 @@ var methods = function () {
     name: 'validatorVersions',
     call: 'debug_validatorVersions',
     params: 2,
-    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex]
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex],
     outputFormatter: formatters.outputKeysToDecimal
   });
 
+  var blocksTransactionTimes = new Method({
+    name: 'blocksTransactionTimes',
+    call: 'debug_blocksTransactionTimes',
+    params: 2,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex],
+    outputFormatter: formatters.outputKeyValuesToDecimal
+  });
+
+  var blocksTTF = new Method({
+    name: 'blocksTTF',
+    call: 'debug_blocksTTF',
+    params: 4,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex, null, utils.toHex ],
+    outputFormatter: formatters.outputBlocksTTFFormatter
+  });
+
+  var blocksTPS = new Method({
+    name: 'blocksTPS',
+    call: 'debug_blocksTransactionTimes',
+    params: 2,
+    inputFormatter: [formatters.inputBlockNumberFormatter, utils.toHex],
+    outputFormatter: formatters.outputBlocksTPSFormatter
+  });
+
   return [
-    ttfReport,
     validatorTimeDrifts,
-    validatorVersions
+    validatorVersions,
+    blocksTransactionTimes,
+    blocksTTF,
+    blocksTPS
   ];
 };
 
@@ -6107,7 +6168,7 @@ var Net = function (web3) {
 
     var self = this;
 
-    properties().forEach(function(p) { 
+    properties().forEach(function(p) {
         p.attachToObject(self);
         p.setRequestManager(web3._requestManager);
     });
@@ -6656,7 +6717,7 @@ module.exports = {
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file namereg.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -6843,7 +6904,7 @@ module.exports = Property;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file requestmanager.js
  * @author Jeffrey Wilcke <jeff@ethdev.com>
  * @author Marek Kotewicz <marek@ethdev.com>
@@ -6910,7 +6971,7 @@ RequestManager.prototype.sendAsync = function (data, callback) {
         if (err) {
             return callback(err);
         }
-        
+
         if (!Jsonrpc.isValidResponse(result)) {
             return callback(errors.InvalidResponse(result));
         }
@@ -6943,7 +7004,7 @@ RequestManager.prototype.sendBatch = function (data, callback) {
         }
 
         callback(err, results);
-    }); 
+    });
 };
 
 /**
@@ -7047,7 +7108,7 @@ RequestManager.prototype.poll = function () {
     }
 
     var payload = Jsonrpc.toBatchPayload(pollsData);
-    
+
     // map the request id to they poll id
     var pollsIdMap = {};
     payload.forEach(function(load, index){
@@ -7077,7 +7138,7 @@ RequestManager.prototype.poll = function () {
             } else
                 return false;
         }).filter(function (result) {
-            return !!result; 
+            return !!result;
         }).filter(function (result) {
             var valid = Jsonrpc.isValidResponse(result);
             if (!valid) {
@@ -7152,16 +7213,16 @@ var pollSyncing = function(self) {
 
         self.callbacks.forEach(function (callback) {
             if (self.lastSyncState !== sync) {
-                
+
                 // call the callback with true first so the app can stop anything, before receiving the sync data
                 if(!self.lastSyncState && utils.isObject(sync))
                     callback(null, true);
-                
+
                 // call on the next CPU cycle, so the actions of the sync stop can be processes first
                 setTimeout(function() {
                     callback(null, sync);
                 }, 0);
-                
+
                 self.lastSyncState = sync;
             }
         });
@@ -7216,7 +7277,7 @@ module.exports = IsSyncing;
     You should have received a copy of the GNU Lesser General Public License
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file transfer.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -7235,7 +7296,7 @@ var exchangeAbi = require('../contracts/SmartExchange.json');
  * @param {Function} callback, callback
  */
 var transfer = function (ftm, from, to, value, callback) {
-    var iban = new Iban(to); 
+    var iban = new Iban(to);
     if (!iban.isValid()) {
         throw new Error('invalid iban address');
     }
@@ -7243,7 +7304,7 @@ var transfer = function (ftm, from, to, value, callback) {
     if (iban.isDirect()) {
         return transferToAddress(ftm, from, iban.address(), value, callback);
     }
-    
+
     if (!callback) {
         var address = ftm.icapNamereg().addr(iban.institution());
         return deposit(ftm, from, address, value, iban.client());
@@ -7252,7 +7313,7 @@ var transfer = function (ftm, from, to, value, callback) {
     ftm.icapNamereg().addr(iban.institution(), function (err, address) {
         return deposit(ftm, from, address, value, iban.client(), callback);
     });
-    
+
 };
 
 /**
