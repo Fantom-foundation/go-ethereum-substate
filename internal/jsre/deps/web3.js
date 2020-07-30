@@ -3984,9 +3984,9 @@ var outputDelegatorsFormatter = function(data) {
  */
 var outputHistogramFormatter = function(data) {
     if (utils.isArray(data)) {
-        data.forEach(function(item) {
+        data.forEach(function(item, i) {
             item.count = utils.toDecimal(item.count);
-            return item
+            data[i] = item
         })
     }
 
