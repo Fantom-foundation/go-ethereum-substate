@@ -3856,6 +3856,7 @@ var outputBlockFormatter = function(block) {
     block.gasUsed = utils.toDecimal(block.gasUsed);
     block.size = utils.toDecimal(block.size);
     block.timestamp = utils.toDecimal(block.timestamp);
+    block.timestampNano = utils.toDecimal(block.timestampNano);
     if(block.number !== null)
         block.number = utils.toDecimal(block.number);
 
