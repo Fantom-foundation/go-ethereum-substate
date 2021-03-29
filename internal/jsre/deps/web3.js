@@ -5990,15 +5990,6 @@ module.exports = Debug;
 var formatters = require('../formatters');
 var utils = require('../../utils/utils');
 var Method = require('../method');
-var Property = require('../property');
-var c = require('../../utils/config');
-var Contract = require('../contract');
-var watches = require('./watches');
-var Filter = require('../filter');
-var IsSyncing = require('../syncing');
-var namereg = require('../namereg');
-var Iban = require('../iban');
-var transfer = require('../transfer');
 
 function Sfc(web3) {
     this._requestManager = web3._requestManager;
@@ -6014,10 +6005,6 @@ function Sfc(web3) {
       p.attachToObject(self);
       p.setRequestManager(self._requestManager);
     });
-
-
-    this.iban = Iban;
-    this.sendIBANTransaction = transfer.bind(null, this);
 }
 
 var methods = function () {
@@ -6158,7 +6145,7 @@ var properties = function () {
 
 module.exports = Sfc;
 
-},{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],382:[function(require,module,exports){
+},{"../../utils/utils":20,"../formatters":30,"../method":36,}],382:[function(require,module,exports){
     /*
           This file is part of web3.js.
 
