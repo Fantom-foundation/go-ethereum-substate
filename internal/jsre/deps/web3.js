@@ -2543,6 +2543,7 @@ var Iban = require('./web3/iban');
 var Ftm = require('./web3/methods/ftm');
 var Debug = require('./web3/methods/debug');
 var Sfc = require('./web3/methods/sfc');
+var Abft = require('./web3/methods/abft');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2567,6 +2568,7 @@ function Web3 (provider) {
     this.ftm = new Ftm(this);
     this.debug = new Debug(this);
     this.sfc = new Sfc(this);
+    this.abft = new Abft(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -2663,7 +2665,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/sfc":381,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/sfc":381,"./web3/methods/abft":382,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -6156,7 +6158,92 @@ var properties = function () {
 
 module.exports = Sfc;
 
-},{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],39:[function(require,module,exports){
+},{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":44,"../property":45,"../syncing":48,"../transfer":49,"./watches":43}],382:[function(require,module,exports){
+    /*
+          This file is part of web3.js.
+
+          web3.js is free software: you can redistribute it and/or modify
+          it under the terms of the GNU Lesser General Public License as published by
+          the Free Software Foundation, either version 3 of the License, or
+          (at your option) any later version.
+
+          web3.js is distributed in the hope that it will be useful,
+          but WITHOUT ANY WARRANTY; without even the implied warranty of
+          MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+          GNU Lesser General Public License for more details.
+
+          You should have received a copy of the GNU Lesser General Public License
+          along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+    */
+    /**
+     * @file abft.js
+     * @author alex <rusdev.alex@gmail.com>
+     * @date 2021
+     */
+
+    "use strict";
+
+    var formatters = require('../formatters');
+    var utils = require('../../utils/utils');
+    var Method = require('../method');
+
+    function Abft(web3) {
+        this._requestManager = web3._requestManager;
+
+        var self = this;
+
+        methods().forEach(function(method) {
+          method.attachToObject(self);
+          method.setRequestManager(self._requestManager);
+        });
+
+        properties().forEach(function(p) {
+          p.attachToObject(self);
+          p.setRequestManager(self._requestManager);
+        });
+
+    }
+
+    var methods = function () {
+
+        var getDowntime = new Method({
+          name: 'getDowntime',
+          call: 'abft_getDowntime',
+          params: 1,
+          inputFormatter: [utils.toHex],
+          outputFormatter: formatters.outputDecimalProperties
+        });
+
+        var getEpochUptime = new Method({
+          name: 'getEpochUptime',
+          call: 'abft_getEpochUptime',
+          params: 1,
+          inputFormatter: [utils.toHex],
+          outputFormatter: formatters.outputBigNumberFormatter
+        });
+
+        var getOriginatedEpochFee = new Method({
+          name: 'getOriginatedEpochFee',
+          call: 'abft_getOriginatedEpochFee',
+          params: 1,
+          inputFormatter: [utils.toHex],
+          outputFormatter: formatters.outputBigNumberFormatter
+        });
+
+        return [
+          getDowntime,
+          getEpochUptime,
+          getOriginatedEpochFee,
+        ];
+    };
+
+    var properties = function () {
+        return [];
+    };
+
+    module.exports = Abft;
+
+    },{"../../utils/utils":20,"../formatters":30,"../method":36}],39:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
