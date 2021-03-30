@@ -2544,6 +2544,7 @@ var Ftm = require('./web3/methods/ftm');
 var Debug = require('./web3/methods/debug');
 var Sfc = require('./web3/methods/sfc');
 var Abft = require('./web3/methods/abft');
+var Dag = require('./web3/methods/dag');
 var DB = require('./web3/methods/db');
 var Shh = require('./web3/methods/shh');
 var Net = require('./web3/methods/net');
@@ -2569,6 +2570,7 @@ function Web3 (provider) {
     this.debug = new Debug(this);
     this.sfc = new Sfc(this);
     this.abft = new Abft(this);
+    this.dag = new Dag(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
@@ -2665,7 +2667,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/sfc":381,"./web3/methods/abft":382,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/ftm":38,"./web3/methods/debug":380,"./web3/methods/sfc":381,"./web3/methods/abft":382,"./web3/methods/dag":383,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -3904,6 +3906,58 @@ var outputEpochStatsFormatter = function(data) {
 };
 
 /**
+ * @method outputDagEventFormatter
+ * @param {Object} DAG event data
+ * @returns {Object}
+ */
+var outputDagEventFormatter = function(data) {
+    //"id":               hexutil.Bytes(header.ID().Bytes()),
+    //"prevEpochHash":    header.PrevEpochHash(),
+    //"parents":          eventIDsToHex(header.Parents()),
+    //"extraData":        hexutil.Bytes(header.Extra()),
+    //"transactionsRoot": hexutil.Bytes(header.TxHash().Bytes()),
+
+    // transform to number
+    data.epoch = utils.toDecimal(data.epoch);
+    data.seq = utils.toDecimal(data.seq);
+    data.frame = utils.toDecimal(data.frame);
+    data.creator = utils.toDecimal(data.creator);
+    data.lamport = utils.toDecimal(data.lamport);
+    data.creationTime = utils.toDecimal(data.creationTime);
+    data.medianTime = utils.toDecimal(data.medianTime);
+    data.gasPowerLeft.shortTerm = utils.toDecimal(data.gasPowerLeft.shortTerm);
+    data.gasPowerLeft.longTerm = utils.toDecimal(data.gasPowerLeft.longTerm);
+    data.gasPowerUsed = utils.toDecimal(data.gasPowerUsed);
+    if (data.hasOwnProperty('size')) {
+        data.size = utils.toDecimal(data.size);
+    }
+    if (data.hasOwnProperty('transactions') && utils.isArray(data.transactions)) {
+        data.transactions.forEach(function(item, i) {
+            if (!utils.isString(item)) {
+                data.transactions[i] = outputTransactionFormatter(item)
+            }
+        })
+    }
+
+    return data;
+};
+
+/**
+ * @method outputHeadsFormatter
+ * @param {Object} stakers data
+ * @returns {Object}
+ */
+var outputHeadsFormatter = function(data) {
+    if (utils.isArray(data)) {
+        data.forEach(function(item, i) {
+            data[i] = item // TODO: format
+        })
+    };
+
+    return data;
+};
+
+/**
  * @method outputStakerFormatter
  * @param {Object} staker data
  * @returns {Object}
@@ -4228,6 +4282,8 @@ module.exports = {
     outputPostFormatter: outputPostFormatter,
     outputSyncingFormatter: outputSyncingFormatter,
     outputEpochStatsFormatter: outputEpochStatsFormatter,
+    outputDagEventFormatter: outputDagEventFormatter,
+    outputHeadsFormatter: outputHeadsFormatter,
     outputBlocksTTFFormatter: outputBlocksTTFFormatter,
     outputValidatorTimeDriftsFormatter: outputValidatorTimeDriftsFormatter,
     outputDecimalProperties: outputDecimalProperties,
@@ -6229,6 +6285,91 @@ module.exports = Sfc;
     };
 
     module.exports = Abft;
+
+},{"../../utils/utils":20,"../formatters":30,"../method":36}],383:[function(require,module,exports){
+    /*
+            This file is part of web3.js.
+
+            web3.js is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Lesser General Public License as published by
+            the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+
+            web3.js is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+            GNU Lesser General Public License for more details.
+
+            You should have received a copy of the GNU Lesser General Public License
+            along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
+    */
+    /**
+     * @file dag.js
+     * @author alex <rusdev.alex@gmail.com>
+     * @date 2021
+     */
+
+    "use strict";
+
+    var formatters = require('../formatters');
+    var utils = require('../../utils/utils');
+    var Method = require('../method');
+
+    function Dag(web3) {
+        this._requestManager = web3._requestManager;
+
+        var self = this;
+
+        methods().forEach(function(method) {
+            method.attachToObject(self);
+            method.setRequestManager(self._requestManager);
+        });
+
+        properties().forEach(function(p) {
+            p.attachToObject(self);
+            p.setRequestManager(self._requestManager);
+        });
+
+    }
+
+    var methods = function () {
+
+        var getEvent = new Method({
+            name: 'getEvent',
+            call: 'dag_getEvent',
+            params: 1,
+            inputFormatter: [null],
+            outputFormatter: formatters.outputDagEventFormatter
+        });
+
+        var getEventPayload = new Method({
+            name: 'getEventPayload',
+            call: 'dag_getEventPayload',
+            params: 2,
+            inputFormatter: [null, function (val) { return !!val; }],
+            outputFormatter: formatters.outputDagEventFormatter
+        });
+
+        var getHeads = new Method({
+            name: 'getHeads',
+            call: 'dag_getHeads',
+            params: 1,
+            inputFormatter: [formatters.inputBlockNumberFormatter],
+            outputFormatter: formatters.outputHeadsFormatter
+        });
+
+        return [
+            getEvent,
+            getEventPayload,
+            getHeads,
+        ];
+    };
+
+    var properties = function () {
+        return [];
+    };
+
+    module.exports = Dag;
 
     },{"../../utils/utils":20,"../formatters":30,"../method":36}],39:[function(require,module,exports){
 /*
