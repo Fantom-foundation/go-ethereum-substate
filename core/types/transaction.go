@@ -565,6 +565,19 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
+func (t *TransactionsByPriceAndNonce) Copy() *TransactionsByPriceAndNonce {
+	txsCopy := make(map[common.Address]Transactions, len(t.txs))
+	for k, v := range t.txs {
+		txsCopy[k] = v
+	}
+	return &TransactionsByPriceAndNonce{
+		txs:     txsCopy,
+		heads:   append(make(TxByPriceAndTime, 0, t.heads.Len()), t.heads...),
+		signer:  t.signer,
+		baseFee: new(big.Int).Set(t.baseFee),
+	}
+}
+
 // Message is a fully derived transaction and implements core.Message
 //
 // NOTE: In a future PR this will be removed.
