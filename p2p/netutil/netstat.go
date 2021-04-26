@@ -4,15 +4,13 @@ import (
 	"github.com/cakturk/go-netstat/netstat"
 )
 
-func PortListeners(port int) (processes map[int]string, err error) {
+func UdpPortListeners(port int) (processes map[int]string, err error) {
 	var binds []netstat.SockTabEntry
 	processes = make(map[int]string)
 
 	for _, socks := range []func(netstat.AcceptFn) ([]netstat.SockTabEntry, error){
 		netstat.UDPSocks,
 		netstat.UDP6Socks,
-		netstat.TCPSocks,
-		netstat.TCP6Socks,
 	} {
 		binds, err = socks(func(se *netstat.SockTabEntry) bool {
 			return int(se.LocalAddr.Port) == port
