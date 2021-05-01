@@ -518,3 +518,44 @@ func deriveChainId(v *big.Int) *big.Int {
 	v = new(big.Int).Sub(v, big.NewInt(35))
 	return v.Div(v, big.NewInt(2))
 }
+
+type CachedSender struct {
+	From   common.Address
+	Signer Signer
+}
+
+type SenderCache interface {
+	Add(txid common.Hash, c CachedSender)
+	Get(txid common.Hash) *CachedSender
+}
+
+type CachedSigner struct {
+	Signer
+	cache SenderCache
+}
+
+func WrapWithCachedSigner(signer Signer, cache SenderCache) *CachedSigner {
+	return &CachedSigner{
+		Signer: signer,
+		cache:  cache,
+	}
+}
+
+func (cs CachedSigner) Sender(tx *Transaction) (common.Address, error) {
+	if tx.from.Load() == nil {
+		// try to load the sender from the global cache
+		cached := cs.cache.Get(tx.Hash())
+		if cached != nil && cached.Signer.Equal(cs.Signer) {
+			return cached.From, nil
+		}
+	}
+	from, err := cs.Signer.Sender(tx)
+	if err != nil {
+		return common.Address{}, err
+	}
+	cs.cache.Add(tx.Hash(), CachedSender{
+		From:   from,
+		Signer: cs.Signer,
+	})
+	return from, nil
+}
