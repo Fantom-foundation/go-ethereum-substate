@@ -73,6 +73,7 @@ type StateDB struct {
 	snapDestructs map[common.Hash]struct{}
 	snapAccounts  map[common.Hash][]byte
 	snapStorage   map[common.Hash]map[common.Hash][]byte
+	snapMaxLayers int
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        map[common.Address]*stateObject
@@ -121,6 +122,10 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+	return NewWithSnapLayers(root, db, snaps, 128)
+}
+
+func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, layers int) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -138,6 +143,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:             newJournal(),
 		accessList:          newAccessList(),
 		hasher:              crypto.NewKeccakState(),
+		snapMaxLayers:       layers,
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -959,8 +965,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+			if err := s.snaps.Cap(root, s.snapMaxLayers); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", s.snapMaxLayers, "err", err)
 			}
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
