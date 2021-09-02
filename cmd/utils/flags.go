@@ -119,7 +119,7 @@ var (
 	}
 	MinFreeDiskSpaceFlag = DirectoryFlag{
 		Name:  "datadir.minfreedisk",
-		Usage: "Minimum free disk space in MB, once reached triggers auto shut down (default = --cache.gc converted to MB, 0 = disabled)",
+		Usage: "Minimum free disk space in MB, once reached triggers auto shut down (default = 8192 MB, 0 = disabled)",
 	}
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
