@@ -258,6 +258,13 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+
+	external := h.externalHash.Load()
+	if external != nil {
+		hash := external.(common.Hash)
+		cpy.SetExternalHash(hash)
+	}
+
 	return &cpy
 }
 
