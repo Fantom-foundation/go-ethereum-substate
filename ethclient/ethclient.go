@@ -163,9 +163,10 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		txs[i] = tx.tx
 	}
 
+	head.SetExternalHash(body.Hash)
 	block := types.NewBlockWithHeader(head).
-		WithBody(txs, uncles).
-		WithHash(body.Hash)
+		WithBody(txs, uncles)
+
 	return block, nil
 }
 
