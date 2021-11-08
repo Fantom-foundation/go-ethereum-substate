@@ -85,6 +85,9 @@ type Header struct {
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
+
+	// caches
+	externalHash atomic.Value `rlp:"-"`
 }
 
 // field type overrides for gencodec
@@ -101,8 +104,19 @@ type headerMarshaling struct {
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
+// Also hash of the header could be overridden with external value.
 func (h *Header) Hash() common.Hash {
+	external := h.externalHash.Load()
+	if external != nil {
+		return external.(common.Hash)
+	}
+
 	return rlpHash(h)
+}
+
+// SetExternalHash overrides hash with external value.
+func (h *Header) SetExternalHash(hash common.Hash) {
+	h.externalHash.Store(hash)
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
@@ -162,7 +176,6 @@ type Block struct {
 	transactions Transactions
 
 	// caches
-	hash atomic.Value
 	size atomic.Value
 
 	// Td is used by package core to store the total difficulty
@@ -245,6 +258,13 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+
+	external := h.externalHash.Load()
+	if external != nil {
+		hash := external.(common.Hash)
+		cpy.SetExternalHash(hash)
+	}
+
 	return &cpy
 }
 
@@ -371,31 +391,9 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	return block
 }
 
-// WithHash returns a new block with the custom hash.
-func (b *Block) WithHash(h common.Hash) *Block {
-	block := &Block{
-		header:       CopyHeader(b.header),
-		transactions: make([]*Transaction, len(b.transactions)),
-		uncles:       make([]*Header, len(b.uncles)),
-	}
-	copy(block.transactions, b.transactions)
-	for i, uncle := range b.uncles {
-		block.uncles[i] = CopyHeader(uncle)
-	}
-
-	block.hash.Store(h)
-	return block
-}
-
 // Hash returns the keccak256 hash of b's header.
-// The hash is computed on the first call and cached thereafter.
 func (b *Block) Hash() common.Hash {
-	if hash := b.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
-	v := b.header.Hash()
-	b.hash.Store(v)
-	return v
+	return b.header.Hash()
 }
 
 type Blocks []*Block
