@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -354,9 +353,7 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 
 // DeriveFields fills the receipts with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, txs Transactions) error {
-	signer := MakeSigner(config, new(big.Int).SetUint64(number))
-
+func (r Receipts) DeriveFields(signer Signer, hash common.Hash, number uint64, txs Transactions) error {
 	logIndex := uint(0)
 	if len(txs) != len(r) {
 		return errors.New("transaction and receipt count mismatch")
@@ -372,7 +369,7 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		r[i].TransactionIndex = uint(i)
 
 		// The contract address can be derived from the transaction itself
-		if txs[i].To() == nil {
+		if signer != nil && txs[i].To() == nil {
 			// Deriving the signer is expensive, only do if it's actually needed
 			from, _ := Sender(signer, txs[i])
 			r[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
