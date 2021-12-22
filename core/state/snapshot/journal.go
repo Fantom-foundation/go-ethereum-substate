@@ -87,7 +87,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	journal := rawdb.ReadSnapshotJournal(db)
 	if len(journal) == 0 {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
+		log.Debug("Loaded snapshot journal", "diskroot", base.root, "diffs", "missing")
 		return base, generator, nil
 	}
 	r := rlp.NewStream(bytes.NewReader(journal), 0)

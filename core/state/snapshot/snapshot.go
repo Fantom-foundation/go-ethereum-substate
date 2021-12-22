@@ -199,7 +199,7 @@ func New(diskdb ethdb.KeyValueStore, triedb *trie.Database, cache int, root comm
 	}
 	if err != nil {
 		if rebuild {
-			log.Warn("Failed to load snapshot, regenerating", "err", err)
+			log.Debug("Failed to load snapshot, regenerating", "err", err)
 			snap.Rebuild(root)
 			return snap, nil
 		}
