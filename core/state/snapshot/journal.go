@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -113,7 +114,7 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// It can happen that Geth crashes without persisting the latest
 	// diff journal.
 	if !bytes.Equal(root.Bytes(), base.root.Bytes()) {
-		log.Warn("Loaded snapshot journal", "diskroot", base.root, "diffs", "unmatched")
+		log.Debug("Loaded snapshot journal", "diskroot", base.root, "diffs", "unmatched")
 		return base, generator, nil
 	}
 	// Load all the snapshot diffs from the journal
