@@ -147,6 +147,8 @@ type cachedNode struct {
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
+
+	committed bool // Flag to mark node is commited to the disk
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
@@ -332,6 +334,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		node:      simplifyNode(node),
 		size:      uint16(size),
 		flushPrev: db.newest,
+		committed: false,
 	}
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
@@ -519,8 +522,14 @@ func (db *Database) Dereference(root common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	batch := db.diskdb.NewBatch()
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	db.dereference(root, common.Hash{})
+	db.dereference(batch, root, common.Hash{})
+
+	// Flush out all accumulated data from the batch to disk
+	if err := batch.Write(); err != nil {
+		log.Warn("Failed to write flush list to disk", "err", err)
+	}
 
 	db.gcnodes += uint64(nodes - len(db.dirties))
 	db.gcsize += storage - db.dirtiesSize
@@ -535,7 +544,7 @@ func (db *Database) Dereference(root common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(child common.Hash, parent common.Hash) {
+func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
 	// Dereference the parent-child
 	node := db.dirties[parent]
 
@@ -574,8 +583,12 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		}
 		// Dereference all children and delete the node
 		node.forChilds(func(hash common.Hash) {
-			db.dereference(hash, child)
+			db.dereference(batch, hash, child)
 		})
+		if db.dirties[child].committed {
+			// node is commited to the disk already, need to delete it on disk also
+			rawdb.DeleteTrieNode(batch, child)
+		}
 		delete(db.dirties, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
@@ -661,7 +674,10 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	}
 	for db.oldest != oldest {
 		node := db.dirties[db.oldest]
-		delete(db.dirties, db.oldest)
+		// delete(db.dirties, db.oldest)
+		// TODO: if we don't delete the dirty nodes here then it will break the cap limit size rule
+		// temporarily to mark the dirty node is commited only
+		db.dirties[db.oldest].committed = true
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
@@ -782,6 +798,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		batch.Reset()
 		db.lock.Unlock()
 	}
+	db.dirties[hash].committed = true
 	return nil
 }
 
