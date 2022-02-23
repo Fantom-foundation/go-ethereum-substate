@@ -677,7 +677,9 @@ func (db *Database) Cap(limit common.StorageSize) error {
 		// delete(db.dirties, db.oldest)
 		// TODO: if we don't delete the dirty nodes here then it will break the cap limit size rule
 		// temporarily to mark the dirty node is commited only
-		db.dirties[db.oldest].committed = true
+		if db.dirties[db.oldest] != nil {
+			db.dirties[db.oldest].committed = true
+		}
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
@@ -798,7 +800,9 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		batch.Reset()
 		db.lock.Unlock()
 	}
-	db.dirties[hash].committed = true
+	if db.dirties[hash] != nil {
+		db.dirties[hash].committed = true
+	}
 	return nil
 }
 
