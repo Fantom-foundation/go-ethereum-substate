@@ -674,12 +674,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 	}
 	for db.oldest != oldest {
 		node := db.dirties[db.oldest]
-		// delete(db.dirties, db.oldest)
-		// TODO: if we don't delete the dirty nodes here then it will break the cap limit size rule
-		// temporarily to mark the dirty node is commited only
-		if db.dirties[db.oldest] != nil {
-			db.dirties[db.oldest].committed = true
-		}
+		delete(db.dirties, db.oldest)
 		db.oldest = node.flushNext
 
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
