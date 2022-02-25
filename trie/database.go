@@ -71,6 +71,7 @@ type Database struct {
 
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
+	commits map[common.Hash]bool        // Tracking the disk commited trie nodes to delete later
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
@@ -147,8 +148,6 @@ type cachedNode struct {
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
-
-	committed bool // Flag to mark node is commited to the disk
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
@@ -306,6 +305,7 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
+		commits: make(map[common.Hash]bool),
 	}
 	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
 		db.preimages = make(map[common.Hash][]byte)
@@ -334,7 +334,6 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		node:      simplifyNode(node),
 		size:      uint16(size),
 		flushPrev: db.newest,
-		committed: false,
 	}
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
@@ -585,10 +584,12 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		node.forChilds(func(hash common.Hash) {
 			db.dereference(batch, hash, child)
 		})
-		if db.dirties[child].committed {
+		committed, ok := db.commits[child]
+		if ok && committed {
 			// node is commited to the disk already, need to delete it on disk also
 			rawdb.DeleteTrieNode(batch, child)
 		}
+		delete(db.commits, child)
 		delete(db.dirties, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
@@ -795,10 +796,11 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 		batch.Reset()
 		db.lock.Unlock()
 	}
-	if db.dirties[hash] != nil {
-		db.dirties[hash].committed = true
-	}
 	return nil
+}
+
+func (db *Database) MarkCommit(hash common.Hash) {
+	db.commits[hash] = true
 }
 
 // cleaner is a database batch replayer that takes a batch of write operations
@@ -810,7 +812,7 @@ type cleaner struct {
 // Put reacts to database writes and implements dirty data uncaching. This is the
 // post-processing step of a commit operation where the already persisted trie is
 // removed from the dirty cache and moved into the clean cache. The reason behind
-// the two-phase commit is to ensure ensure data availability while moving from
+// the two-phase commit is to ensure data availability while moving from
 // memory to disk.
 func (c *cleaner) Put(key []byte, rlp []byte) error {
 	hash := common.BytesToHash(key)
