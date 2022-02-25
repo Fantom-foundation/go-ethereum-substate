@@ -71,7 +71,7 @@ type Database struct {
 
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
-	commits map[common.Hash]bool        // Tracking the disk commited trie nodes to delete later
+	commits map[common.Hash]*cachedNode // Tracking the disk commited trie nodes to delete later
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
@@ -305,7 +305,9 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
-		commits: make(map[common.Hash]bool),
+		commits: map[common.Hash]*cachedNode{{}: {
+			children: make(map[common.Hash]uint16),
+		}},
 	}
 	if config == nil || config.Preimages { // TODO(karalabe): Flip to default off in the future
 		db.preimages = make(map[common.Hash][]byte)
@@ -521,9 +523,10 @@ func (db *Database) Dereference(root common.Hash) {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	batch := db.diskdb.NewBatch()
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	db.dereference(batch, root, common.Hash{})
+	db.dereference(root, common.Hash{})
+	batch := db.diskdb.NewBatch()
+	db.delete(batch, root)
 
 	// Flush out all accumulated data from the batch to disk
 	if err := batch.Write(); err != nil {
@@ -543,7 +546,7 @@ func (db *Database) Dereference(root common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
+func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	// Dereference the parent-child
 	node := db.dirties[parent]
 
@@ -555,15 +558,8 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		}
 	}
 	// If the child does not exist, it's a previously committed node.
-	// Delete the node on disk if it be marked as well
 	node, ok := db.dirties[child]
 	if !ok {
-		committed, ok := db.commits[child]
-		if ok && committed {
-			// node is commited to the disk already, need to delete it on disk also
-			rawdb.DeleteTrieNode(batch, child)
-		}
-		delete(db.commits, child)
 		return
 	}
 	// If there are no more references to the child, delete it and cascade
@@ -589,20 +585,29 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		}
 		// Dereference all children and delete the node
 		node.forChilds(func(hash common.Hash) {
-			db.dereference(batch, hash, child)
+			db.dereference(hash, child)
 		})
-		committed, ok := db.commits[child]
-		if ok && committed {
-			// node is commited to the disk already, need to delete it on disk also
-			rawdb.DeleteTrieNode(batch, child)
-		}
-		delete(db.commits, child)
 		delete(db.dirties, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
 			db.childrenSize -= cachedNodeChildrenSize
 		}
 	}
+}
+
+// delete delete trie node on disk by hash
+func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash) {
+	// If the child does not exist, it's a previously committed node.
+	node, ok := db.commits[child]
+	if !ok {
+		return
+	}
+	// Delete all children and delete the node
+	node.forChilds(func(hash common.Hash) {
+		db.delete(batch, hash)
+	})
+	rawdb.DeleteTrieNode(batch, child)
+	delete(db.commits, child)
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
@@ -807,7 +812,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 }
 
 func (db *Database) MarkCommit(hash common.Hash) {
-	db.commits[hash] = true
+	db.commits[hash] = db.dirties[hash]
 }
 
 // cleaner is a database batch replayer that takes a batch of write operations
