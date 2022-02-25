@@ -555,8 +555,15 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		}
 	}
 	// If the child does not exist, it's a previously committed node.
+	// Delete the node on disk if it be marked as well
 	node, ok := db.dirties[child]
 	if !ok {
+		committed, ok := db.commits[child]
+		if ok && committed {
+			// node is commited to the disk already, need to delete it on disk also
+			rawdb.DeleteTrieNode(batch, child)
+		}
+		delete(db.commits, child)
 		return
 	}
 	// If there are no more references to the child, delete it and cascade
