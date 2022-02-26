@@ -608,6 +608,7 @@ func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash) {
 	})
 	rawdb.DeleteTrieNode(batch, child)
 	delete(db.commits, child)
+	log.Info("delete trie node on disk by hash", "hash", child)
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
@@ -812,6 +813,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 }
 
 func (db *Database) MarkCommit(hash common.Hash) {
+	log.Info("mark node as commited node", "hash", hash)
 	db.commits[hash] = db.dirties[hash]
 }
 
