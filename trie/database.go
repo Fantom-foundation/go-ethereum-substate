@@ -526,7 +526,7 @@ func (db *Database) Dereference(root common.Hash) {
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
 	db.dereference(root, common.Hash{})
 	batch := db.diskdb.NewBatch()
-	db.delete(batch, root)
+	db.delete(batch, root, common.Hash{})
 
 	// Flush out all accumulated data from the batch to disk
 	if err := batch.Write(); err != nil {
@@ -596,19 +596,38 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 }
 
 // delete delete trie node on disk by hash
-func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash) {
+func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
+	// Dereference the parent-child
+	node := db.commits[parent]
+
+	if node.children != nil && node.children[child] > 0 {
+		node.children[child]--
+		if node.children[child] == 0 {
+			delete(node.children, child)
+		}
+	}
 	// If the child does not exist, it's a previously committed node.
 	node, ok := db.commits[child]
 	if !ok {
 		return
 	}
-	// Delete all children and delete the node
-	node.forChilds(func(hash common.Hash) {
-		db.delete(batch, hash)
-	})
-	rawdb.DeleteTrieNode(batch, child)
-	delete(db.commits, child)
-	log.Info("delete trie node on disk by hash", "hash", child)
+	// If there are no more references to the child, delete it and cascade
+	if node.parents > 0 {
+		// This is a special cornercase where a node loaded from disk (i.e. not in the
+		// memcache any more) gets reinjected as a new node (short node split into full,
+		// then reverted into short), causing a cached node to have no parents. That is
+		// no problem in itself, but don't make maxint parents out of it.
+		node.parents--
+	}
+	if node.parents == 0 {
+		// Delete all children and delete the node
+		node.forChilds(func(hash common.Hash) {
+			db.delete(batch, hash, child)
+		})
+		rawdb.DeleteTrieNode(batch, child)
+		delete(db.commits, child)
+		log.Info("delete trie node on disk by hash", "hash", child)
+	}
 }
 
 // Cap iteratively flushes old but still referenced trie nodes until the total
