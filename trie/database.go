@@ -71,7 +71,6 @@ type Database struct {
 
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
 	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty trie nodes
-	commits map[common.Hash]*cachedNode // Tracking the disk commited trie nodes to delete later
 	oldest  common.Hash                 // Oldest tracked node, flush-list head
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
@@ -148,6 +147,8 @@ type cachedNode struct {
 
 	flushPrev common.Hash // Previous node in the flush-list
 	flushNext common.Hash // Next node in the flush-list
+
+	commited bool
 }
 
 // cachedNodeSize is the raw size of a cachedNode data structure without any
@@ -306,9 +307,6 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		diskdb: diskdb,
 		cleans: cleans,
 		dirties: map[common.Hash]*cachedNode{{}: {
-			children: make(map[common.Hash]uint16),
-		}},
-		commits: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
 	}
@@ -527,9 +525,8 @@ func (db *Database) Dereference(root common.Hash) {
 	defer db.lock.Unlock()
 
 	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
-	db.dereference(root, common.Hash{})
 	batch := db.diskdb.NewBatch()
-	db.delete(batch, root, common.Hash{})
+	db.dereference(batch, root, common.Hash{})
 
 	// Flush out all accumulated data from the batch to disk
 	if err := batch.Write(); err != nil {
@@ -549,7 +546,7 @@ func (db *Database) Dereference(root common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(child common.Hash, parent common.Hash) {
+func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
 	// Dereference the parent-child
 	node := db.dirties[parent]
 
@@ -588,48 +585,14 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		}
 		// Dereference all children and delete the node
 		node.forChilds(func(hash common.Hash) {
-			db.dereference(hash, child)
+			db.dereference(batch, hash, child)
 		})
 		delete(db.dirties, child)
+		rawdb.DeleteTrieNode(batch, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
 			db.childrenSize -= cachedNodeChildrenSize
 		}
-	}
-}
-
-// delete delete trie node on disk by hash
-func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
-	// Dereference the parent-child
-	node := db.commits[parent]
-
-	if node.children != nil && node.children[child] > 0 {
-		node.children[child]--
-		if node.children[child] == 0 {
-			delete(node.children, child)
-		}
-	}
-	// If the child does not exist, it's a previously committed node.
-	node, ok := db.commits[child]
-	if !ok {
-		return
-	}
-	// If there are no more references to the child, delete it and cascade
-	if node.parents > 0 {
-		// This is a special cornercase where a node loaded from disk (i.e. not in the
-		// memcache any more) gets reinjected as a new node (short node split into full,
-		// then reverted into short), causing a cached node to have no parents. That is
-		// no problem in itself, but don't make maxint parents out of it.
-		node.parents--
-	}
-	if node.parents == 0 {
-		// Delete all children and delete the node
-		node.forChilds(func(hash common.Hash) {
-			db.delete(batch, hash, child)
-		})
-		rawdb.DeleteTrieNode(batch, child)
-		delete(db.commits, child)
-		log.Debug("delete trie node on disk by hash", "hash", child)
 	}
 }
 
@@ -834,11 +797,6 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 	return nil
 }
 
-func (db *Database) MarkCommit(hash common.Hash) {
-	log.Debug("mark node as commited node", "hash", hash)
-	db.commits[hash] = db.dirties[hash]
-}
-
 // cleaner is a database batch replayer that takes a batch of write operations
 // and cleans up the trie database from anything written to disk.
 type cleaner struct {
@@ -871,7 +829,8 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
 	}
 	// Remove the node from the dirty cache
-	delete(c.db.dirties, hash)
+	// delete(c.db.dirties, hash)
+	c.db.dirties[hash].commited = true
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
 		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
