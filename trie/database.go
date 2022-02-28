@@ -587,8 +587,10 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		node.forChilds(func(hash common.Hash) {
 			db.dereference(batch, hash, child)
 		})
+		if db.dirties[child].commited {
+			rawdb.DeleteTrieNode(batch, child)
+		}
 		delete(db.dirties, child)
-		rawdb.DeleteTrieNode(batch, child)
 		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 		if node.children != nil {
 			db.childrenSize -= cachedNodeChildrenSize
