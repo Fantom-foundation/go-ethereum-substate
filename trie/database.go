@@ -185,6 +185,9 @@ func (n *cachedNode) obj(hash common.Hash) node {
 // both the implicit ones from inside the node as well as the explicit ones
 // from outside the node.
 func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
+	if n == nil {
+		return
+	}
 	for child := range n.children {
 		onChild(child)
 	}
