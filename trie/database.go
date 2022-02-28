@@ -626,7 +626,7 @@ func (db *Database) delete(batch ethdb.KeyValueWriter, child common.Hash, parent
 		})
 		rawdb.DeleteTrieNode(batch, child)
 		delete(db.commits, child)
-		log.Info("delete trie node on disk by hash", "hash", child)
+		log.Debug("delete trie node on disk by hash", "hash", child)
 	}
 }
 
@@ -832,7 +832,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 }
 
 func (db *Database) MarkCommit(hash common.Hash) {
-	log.Info("mark node as commited node", "hash", hash)
+	log.Debug("mark node as commited node", "hash", hash)
 	db.commits[hash] = db.dirties[hash]
 }
 
