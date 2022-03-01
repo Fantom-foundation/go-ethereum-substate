@@ -337,6 +337,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		node:      simplifyNode(node),
 		size:      uint16(size),
 		flushPrev: db.newest,
+		commited:  false,
 	}
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
@@ -572,17 +573,20 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 	}
 	if node.parents == 0 {
 		// Remove the node from the flush-list
-		switch child {
-		case db.oldest:
-			db.oldest = node.flushNext
-			db.dirties[node.flushNext].flushPrev = common.Hash{}
-		case db.newest:
-			db.newest = node.flushPrev
-			db.dirties[node.flushPrev].flushNext = common.Hash{}
-		default:
-			db.dirties[node.flushPrev].flushNext = node.flushNext
-			db.dirties[node.flushNext].flushPrev = node.flushPrev
+		if !node.commited {
+			switch child {
+			case db.oldest:
+				db.oldest = node.flushNext
+				db.dirties[node.flushNext].flushPrev = common.Hash{}
+			case db.newest:
+				db.newest = node.flushPrev
+				db.dirties[node.flushPrev].flushNext = common.Hash{}
+			default:
+				db.dirties[node.flushPrev].flushNext = node.flushNext
+				db.dirties[node.flushNext].flushPrev = node.flushPrev
+			}
 		}
+
 		// Dereference all children and delete the node
 		node.forChilds(func(hash common.Hash) {
 			db.dereference(batch, hash, child)
@@ -818,20 +822,21 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	if !ok {
 		return nil
 	}
-	// Node still exists, remove it from the flush-list
-	switch hash {
-	case c.db.oldest:
-		c.db.oldest = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = common.Hash{}
-	case c.db.newest:
-		c.db.newest = node.flushPrev
-		c.db.dirties[node.flushPrev].flushNext = common.Hash{}
-	default:
-		c.db.dirties[node.flushPrev].flushNext = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
+	// Node still exists and uncommitted, remove it from the flush-list
+	if !node.commited {
+		switch hash {
+		case c.db.oldest:
+			c.db.oldest = node.flushNext
+			c.db.dirties[node.flushNext].flushPrev = common.Hash{}
+		case c.db.newest:
+			c.db.newest = node.flushPrev
+			c.db.dirties[node.flushPrev].flushNext = common.Hash{}
+		default:
+			c.db.dirties[node.flushPrev].flushNext = node.flushNext
+			c.db.dirties[node.flushNext].flushPrev = node.flushPrev
+		}
 	}
-	// Remove the node from the dirty cache
-	// delete(c.db.dirties, hash)
+	// Mark the node from in the dirty cache as committed
 	c.db.dirties[hash].commited = true
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
