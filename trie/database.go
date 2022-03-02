@@ -836,7 +836,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 			c.db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
 	}
-	// Mark the node from in the dirty cache as committed
+	// Mark the node in the dirty cache as committed
 	c.db.dirties[hash].commited = true
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
