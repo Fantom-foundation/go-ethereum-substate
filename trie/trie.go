@@ -105,7 +105,7 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error(fmt.Sprintf("Get Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -117,6 +117,9 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
+	}
+	if err != nil {
+		log.Error(fmt.Sprintf("TryGet Unhandled trie error: %v", err))
 	}
 	return value, err
 }
@@ -162,6 +165,7 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
 	item, newroot, resolved, err := t.tryGetNode(t.root, compactToHex(path), 0)
 	if err != nil {
+		log.Error(fmt.Sprintf("TryGetNode Unhandled trie error: %v", err))
 		return nil, resolved, err
 	}
 	if resolved > 0 {
@@ -242,7 +246,7 @@ func (t *Trie) tryGetNode(origNode node, path []byte, pos int) (item []byte, new
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error(fmt.Sprintf("Update Unhandled trie error: %v", err))
 	}
 }
 
@@ -260,12 +264,14 @@ func (t *Trie) TryUpdate(key, value []byte) error {
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
 		if err != nil {
+			log.Error(fmt.Sprintf("TryUpdate (insert) Unhandled trie error: %v", err))
 			return err
 		}
 		t.root = n
 	} else {
 		_, n, err := t.delete(t.root, nil, k)
 		if err != nil {
+			log.Error(fmt.Sprintf("TryUpdate (delete) Unhandled trie error: %v", err))
 			return err
 		}
 		t.root = n
@@ -345,7 +351,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		log.Error(fmt.Sprintf("Delete Unhandled trie error: %v", err))
 	}
 }
 
@@ -356,6 +362,7 @@ func (t *Trie) TryDelete(key []byte) error {
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
+		log.Error(fmt.Sprintf("TryDelete Unhandled trie error: %v", err))
 		return err
 	}
 	t.root = n
