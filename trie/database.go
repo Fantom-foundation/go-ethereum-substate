@@ -592,6 +592,7 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 			db.dereference(batch, hash, child)
 		})
 		if db.dirties[child].commited {
+			log.Info("delete trie node", "hash", child)
 			rawdb.DeleteTrieNode(batch, child)
 		}
 		delete(db.dirties, child)
