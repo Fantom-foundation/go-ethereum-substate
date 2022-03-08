@@ -579,18 +579,16 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 	}
 	if node.parents == 0 {
 		// Remove the node from the flush-list
-		if !node.commited {
-			switch child {
-			case db.oldest:
-				db.oldest = node.flushNext
-				db.dirties[node.flushNext].flushPrev = common.Hash{}
-			case db.newest:
-				db.newest = node.flushPrev
-				db.dirties[node.flushPrev].flushNext = common.Hash{}
-			default:
-				db.dirties[node.flushPrev].flushNext = node.flushNext
-				db.dirties[node.flushNext].flushPrev = node.flushPrev
-			}
+		switch child {
+		case db.oldest:
+			db.oldest = node.flushNext
+			db.dirties[node.flushNext].flushPrev = common.Hash{}
+		case db.newest:
+			db.newest = node.flushPrev
+			db.dirties[node.flushPrev].flushNext = common.Hash{}
+		default:
+			db.dirties[node.flushPrev].flushNext = node.flushNext
+			db.dirties[node.flushNext].flushPrev = node.flushPrev
 		}
 
 		// Dereference all children and delete the node
@@ -872,35 +870,12 @@ func (g *greedy) Put(key []byte, rlp []byte) error {
 	hash := common.BytesToHash(key)
 
 	// If the node does not exist, we're done on this path
-	node, ok := g.db.dirties[hash]
+	_, ok := g.db.dirties[hash]
 	if !ok {
 		return nil
 	}
-	// Node still exists and uncommitted, remove it from the flush-list
-	if !node.commited {
-		switch hash {
-		case g.db.oldest:
-			g.db.oldest = node.flushNext
-			g.db.dirties[node.flushNext].flushPrev = common.Hash{}
-		case g.db.newest:
-			g.db.newest = node.flushPrev
-			g.db.dirties[node.flushPrev].flushNext = common.Hash{}
-		default:
-			g.db.dirties[node.flushPrev].flushNext = node.flushNext
-			g.db.dirties[node.flushNext].flushPrev = node.flushPrev
-		}
-	}
 	// Remove the node from the dirty cache
 	g.db.dirties[hash].commited = true
-	g.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-	if node.children != nil {
-		g.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
-	}
-	// Move the flushed node into the clean cache to prevent insta-reloads
-	if g.db.cleans != nil {
-		g.db.cleans.Set(hash[:], rlp)
-		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
-	}
 	return nil
 }
 
