@@ -747,16 +747,17 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 		log.Error("Failed to commit trie from trie database", "err", err)
 		return err
 	}
-	// Trie mostly committed to disk, flush any batch leftovers
-	if err := batch.Write(); err != nil {
-		log.Error("Failed to write trie to disk", "err", err)
-		return err
-	}
 	// Uncache any leftovers in the last batch
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	batch.Replay(uncacher)
+
+	// Trie mostly committed to disk, flush any batch leftovers
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to write trie to disk", "err", err)
+		return err
+	}
 	batch.Reset()
 
 	// Reset the storage counters and bumped metrics
@@ -875,8 +876,11 @@ func (g *greedy) Put(key []byte, rlp []byte) error {
 	if !ok {
 		return nil
 	}
-	// Remove the node from the dirty cache
-	g.db.dirties[hash].commited = true
+	// Mark node as commited if node does not existing on db
+	blob := rawdb.ReadTrieNode(g.db.diskdb, hash)
+	if len(blob) == 0 {
+		g.db.dirties[hash].commited = true
+	}
 	return nil
 }
 
