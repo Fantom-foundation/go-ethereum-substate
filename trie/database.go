@@ -350,6 +350,7 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 			c.parents++
 		}
 	})
+	log.Info("insert new trie node into db.dirties", "hash", hash)
 	db.dirties[hash] = entry
 
 	// Update the flush-list endpoints
