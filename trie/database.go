@@ -877,8 +877,7 @@ func (g *greedy) Put(key []byte, rlp []byte) error {
 		return nil
 	}
 	// Mark node as commited if node does not existing on db
-	blob := rawdb.ReadTrieNode(g.db.diskdb, hash)
-	if len(blob) == 0 {
+	if exist, _ := g.db.diskdb.Has(hash[:]); !exist {
 		g.db.dirties[hash].commited = true
 	}
 	return nil
