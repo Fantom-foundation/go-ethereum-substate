@@ -350,7 +350,6 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 			c.parents++
 		}
 	})
-	log.Trace("insert new trie node into db.dirties", "hash", hash)
 	db.dirties[hash] = entry
 
 	// Update the flush-list endpoints
@@ -597,7 +596,6 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 			db.dereference(batch, hash, child)
 		})
 		if db.dirties[child].commited {
-			log.Warn("delete trie node", "hash", child)
 			rawdb.DeleteTrieNode(batch, child)
 		}
 		delete(db.dirties, child)
