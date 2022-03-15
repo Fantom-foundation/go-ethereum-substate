@@ -821,6 +821,28 @@ type cleaner struct {
 	db *Database
 }
 
+// evictDirty update the flush-list and remove node from dirty cache
+func evictDirty(db *Database, hash common.Hash, node *cachedNode) {
+	// Node still exists, remove it from the flush-list
+	switch hash {
+	case db.oldest:
+		db.oldest = node.flushNext
+		db.dirties[node.flushNext].flushPrev = common.Hash{}
+	case db.newest:
+		db.newest = node.flushPrev
+		db.dirties[node.flushPrev].flushNext = common.Hash{}
+	default:
+		db.dirties[node.flushPrev].flushNext = node.flushNext
+		db.dirties[node.flushNext].flushPrev = node.flushPrev
+	}
+	// Remove the node from the dirty cache
+	delete(db.dirties, hash)
+	db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+	if node.children != nil {
+		db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+	}
+}
+
 // Put reacts to database writes and implements dirty data uncaching. This is the
 // post-processing step of a commit operation where the already persisted trie is
 // removed from the dirty cache and moved into the clean cache. The reason behind
@@ -834,24 +856,7 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	if !ok {
 		return nil
 	}
-	// Node still exists, remove it from the flush-list
-	switch hash {
-	case c.db.oldest:
-		c.db.oldest = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = common.Hash{}
-	case c.db.newest:
-		c.db.newest = node.flushPrev
-		c.db.dirties[node.flushPrev].flushNext = common.Hash{}
-	default:
-		c.db.dirties[node.flushPrev].flushNext = node.flushNext
-		c.db.dirties[node.flushNext].flushPrev = node.flushPrev
-	}
-	// Remove the node from the dirty cache
-	delete(c.db.dirties, hash)
-	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
-	if node.children != nil {
-		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
-	}
+	evictDirty(c.db, hash, node)
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {
 		c.db.cleans.Set(hash[:], rlp)
@@ -872,13 +877,15 @@ func (g *greedy) Put(key []byte, rlp []byte) error {
 	hash := common.BytesToHash(key)
 
 	// If the node does not exist, we're done on this path
-	_, ok := g.db.dirties[hash]
+	node, ok := g.db.dirties[hash]
 	if !ok {
 		return nil
 	}
 	// Mark node as commited if node does not existing on db
 	if exist, _ := g.db.diskdb.Has(hash[:]); !exist {
 		g.db.dirties[hash].commited = true
+	} else {
+		evictDirty(g.db, hash, node)
 	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if g.db.cleans != nil {
