@@ -784,9 +784,9 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher ethdb.KeyValueWriter, callback func(common.Hash)) error {
-	// If the node does not exist, it's a previously committed node
+	// If the node does not exist or marked as committed, then it's a previously committed node
 	node, ok := db.dirties[hash]
-	if !ok {
+	if !ok || node.commited {
 		return nil
 	}
 	var err error
@@ -799,9 +799,7 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher ethdb.K
 		return err
 	}
 	// If we've reached an optimal batch size, commit and start over
-	if !node.commited {
-		rawdb.WriteTrieNode(batch, hash, node.rlp())
-	}
+	rawdb.WriteTrieNode(batch, hash, node.rlp())
 	if callback != nil {
 		callback(hash)
 	}
