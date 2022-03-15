@@ -882,6 +882,11 @@ func (g *greedy) Put(key []byte, rlp []byte) error {
 	if exist, _ := g.db.diskdb.Has(hash[:]); !exist {
 		g.db.dirties[hash].commited = true
 	}
+	// Move the flushed node into the clean cache to prevent insta-reloads
+	if g.db.cleans != nil {
+		g.db.cleans.Set(hash[:], rlp)
+		memcacheCleanWriteMeter.Mark(int64(len(rlp)))
+	}
 	return nil
 }
 
