@@ -187,9 +187,6 @@ func (n *cachedNode) obj(hash common.Hash) node {
 // both the implicit ones from inside the node as well as the explicit ones
 // from outside the node.
 func (n *cachedNode) forChilds(onChild func(hash common.Hash)) {
-	if n == nil {
-		return
-	}
 	for child := range n.children {
 		onChild(child)
 	}
@@ -306,9 +303,8 @@ func NewDatabaseWithConfig(diskdb ethdb.KeyValueStore, config *Config) *Database
 		}
 	}
 	db := &Database{
-		diskdb:   diskdb,
-		greedyGC: false,
-		cleans:   cleans,
+		diskdb: diskdb,
+		cleans: cleans,
 		dirties: map[common.Hash]*cachedNode{{}: {
 			children: make(map[common.Hash]uint16),
 		}},
@@ -343,7 +339,6 @@ func (db *Database) insert(hash common.Hash, size int, node node) {
 		node:      simplifyNode(node),
 		size:      uint16(size),
 		flushPrev: db.newest,
-		commited:  false,
 	}
 	entry.forChilds(func(child common.Hash) {
 		if c := db.dirties[child]; c != nil {
