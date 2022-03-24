@@ -72,7 +72,7 @@ type callProc struct {
 }
 
 func newHandler(connCtx context.Context, conn jsonWriter, idgen func() ID, reg *serviceRegistry) *handler {
-	rootCtx, cancelRoot := context.WithCancel(connCtx)
+	rootCtx, cancelRoot := context.WithTimeout(connCtx, 10*time.Second)
 	h := &handler{
 		reg:            reg,
 		idgen:          idgen,
