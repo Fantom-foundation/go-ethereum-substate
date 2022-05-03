@@ -534,6 +534,7 @@ func (db *Database) Dereference(root common.Hash) {
 	if err := batch.Write(); err != nil {
 		log.Warn("Failed to write flush list to disk", "err", err)
 	}
+	batch.Reset()
 
 	db.gcnodes += uint64(nodes - len(db.dirties))
 	db.gcsize += storage - db.dirtiesSize
@@ -548,7 +549,7 @@ func (db *Database) Dereference(root common.Hash) {
 }
 
 // dereference is the private locked version of Dereference.
-func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, parent common.Hash) {
+func (db *Database) dereference(batch ethdb.Batch, child common.Hash, parent common.Hash) {
 	// Dereference the parent-child
 	node := db.dirties[parent]
 
@@ -584,6 +585,13 @@ func (db *Database) dereference(batch ethdb.KeyValueWriter, child common.Hash, p
 		default:
 			db.dirties[node.flushPrev].flushNext = node.flushNext
 			db.dirties[node.flushNext].flushPrev = node.flushPrev
+		}
+
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Warn("Error on batch flushing out on disk", "err", err)
+			}
+			batch.Reset()
 		}
 
 		// Dereference all children and delete the node
@@ -799,13 +807,13 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher ethdb.K
 		callback(hash)
 	}
 	if batch.ValueSize() >= ethdb.IdealBatchSize {
+		db.lock.Lock()
+		batch.Replay(uncacher)
+		db.lock.Unlock()
 		if err := batch.Write(); err != nil {
 			return err
 		}
-		db.lock.Lock()
-		batch.Replay(uncacher)
 		batch.Reset()
-		db.lock.Unlock()
 	}
 	return nil
 }
