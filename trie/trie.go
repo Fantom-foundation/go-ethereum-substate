@@ -118,9 +118,6 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	if err == nil && didResolve {
 		t.root = newroot
 	}
-	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-	}
 	return value, err
 }
 
@@ -165,7 +162,6 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 func (t *Trie) TryGetNode(path []byte) ([]byte, int, error) {
 	item, newroot, resolved, err := t.tryGetNode(t.root, compactToHex(path), 0)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 		return nil, resolved, err
 	}
 	if resolved > 0 {
@@ -264,14 +260,12 @@ func (t *Trie) TryUpdate(key, value []byte) error {
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
 		if err != nil {
-			log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 			return err
 		}
 		t.root = n
 	} else {
 		_, n, err := t.delete(t.root, nil, k)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 			return err
 		}
 		t.root = n
@@ -362,7 +356,6 @@ func (t *Trie) TryDelete(key []byte) error {
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 		return err
 	}
 	t.root = n
