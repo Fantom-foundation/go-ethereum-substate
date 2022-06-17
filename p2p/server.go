@@ -556,7 +556,7 @@ func (srv *Server) setupDiscovery() error {
 
 	listeners, err := netutil.UdpPortListeners(addr.Port)
 	if err != nil {
-		return err
+		srv.log.Warn("UDP port netstat", "addr", addr, "err", err)
 	}
 	if len(listeners) > 0 {
 		err = errAlreadyListened
