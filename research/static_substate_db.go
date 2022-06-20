@@ -12,7 +12,7 @@ var (
 	SubstateDirFlag = cli.StringFlag{
 		Name:  "substatedir",
 		Usage: "Data directory for substate recorder/replayer",
-		Value: "substate.ethereum",
+		Value: "./substate.ethereum",
 	}
 	substateDir      = SubstateDirFlag.Value
 	staticSubstateDB *SubstateDB
@@ -24,6 +24,7 @@ func OpenSubstateDB() {
 	if err != nil {
 		panic(fmt.Errorf("error opening substate leveldb %s: %v", substateDir, err))
 	}
+	fmt.Println("record-replay: opened successfully")
 	staticSubstateDB = NewSubstateDB(backend)
 }
 
