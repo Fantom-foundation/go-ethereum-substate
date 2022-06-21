@@ -50,7 +50,7 @@ func replayTask(block uint64, tx int, substate *research.Substate, taskPool *res
 	var (
 		vmConfig    vm.Config
 		chainConfig *params.ChainConfig
-		getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)
+		getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)
 	)
 
 	vmConfig = vm.Config{}
@@ -60,7 +60,7 @@ func replayTask(block uint64, tx int, substate *research.Substate, taskPool *res
 	// disable DAOForkSupport, otherwise account states will be overwritten
 	chainConfig.DAOForkSupport = false
 
-	getTracerFn = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
+	getTracerFn = func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error) {
 		return nil, nil
 	}
 

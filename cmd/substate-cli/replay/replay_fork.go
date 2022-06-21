@@ -123,12 +123,12 @@ func replayForkTask(block uint64, tx int, substate *research.Substate, taskPool 
 
 	var (
 		vmConfig    vm.Config
-		getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error)
+		getTracerFn func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error)
 	)
 
 	vmConfig = vm.Config{}
 
-	getTracerFn = func(txIndex int, txHash common.Hash) (tracer vm.EVMLogger, err error) {
+	getTracerFn = func(txIndex int, txHash common.Hash) (tracer vm.Tracer, err error) {
 		return nil, nil
 	}
 
