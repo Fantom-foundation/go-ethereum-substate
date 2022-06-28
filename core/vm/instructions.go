@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/state"
 )
@@ -40,7 +41,9 @@ func opSub(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 func opMul(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.peek()
+	fmt.Printf(" (%v,%v) ", x.Hex(), y.Hex())
 	y.Mul(&x, y)
+	fmt.Printf(" -> %v", y.Hex())
 	return nil, nil
 }
 
@@ -70,7 +73,9 @@ func opSmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opExp(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	base, exponent := scope.Stack.pop(), scope.Stack.peek()
+	fmt.Printf(" (%v,%v) ", base.Hex(), exponent.Hex())
 	exponent.Exp(&base, exponent)
+	fmt.Printf(" -> %v ", exponent.Hex())
 	return nil, nil
 }
 
@@ -82,7 +87,9 @@ func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 
 func opNot(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x := scope.Stack.peek()
+	fmt.Printf(" %v ", x.Hex())
 	x.Not(x)
+	fmt.Printf(" -> %v ", x.Hex())
 	return nil, nil
 }
 
@@ -148,13 +155,17 @@ func opIszero(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 func opAnd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.peek()
+	fmt.Printf(" (%v,%v) ", x.Hex(), y.Hex())
 	y.And(&x, y)
+	fmt.Printf(" -> %v", y.Hex())
 	return nil, nil
 }
 
 func opOr(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.peek()
+	fmt.Printf(" (%v,%v) ", x.Hex(), y.Hex())
 	y.Or(&x, y)
+	fmt.Printf(" -> %v", y.Hex())
 	return nil, nil
 }
 
@@ -284,6 +295,7 @@ func opCallDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	x := scope.Stack.peek()
 	if offset, overflow := x.Uint64WithOverflow(); !overflow {
 		data := getData(scope.Contract.Input, offset, 32)
+		fmt.Printf(" %v", getData(scope.Contract.Input, offset, 32))
 		x.SetBytes(data)
 	} else {
 		x.Clear()
@@ -292,6 +304,7 @@ func opCallDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 }
 
 func opCallDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	fmt.Printf(" %v", len(scope.Contract.Input))
 	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Input))))
 	return nil, nil
 }
@@ -309,12 +322,15 @@ func opCallDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// These values are checked for overflow during gas cost calculation
 	memOffset64 := memOffset.Uint64()
 	length64 := length.Uint64()
+	fmt.Printf(" %v", memOffset64)
+	fmt.Printf(" %v", getData(scope.Contract.Input, dataOffset64, length64))
 	scope.Memory.Set(memOffset64, length64, getData(scope.Contract.Input, dataOffset64, length64))
 
 	return nil, nil
 }
 
 func opReturnDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	fmt.Printf(" %v", len(interpreter.returnData))
 	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(interpreter.returnData))))
 	return nil, nil
 }
@@ -338,6 +354,8 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, ErrReturnDataOutOfBounds
 	}
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), interpreter.returnData[offset64:end64])
+	fmt.Printf(" %v %v ", memOffset, length)
+	fmt.Printf(" %v", interpreter.returnData[offset64:end64])
 	return nil, nil
 }
 
@@ -499,7 +517,9 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v := scope.Stack.peek()
 	offset := int64(v.Uint64())
+	fmt.Printf(" (%v) ", v.Hex())
 	v.SetBytes(scope.Memory.GetPtr(offset, 32))
+	fmt.Printf(" -> %v", v.Hex())
 	return nil, nil
 }
 
@@ -507,6 +527,7 @@ func opMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
 	scope.Memory.Set32(mStart.Uint64(), &val)
+	fmt.Printf(" (%v,%v)", mStart.Hex(), val.Hex())
 	return nil, nil
 }
 
@@ -520,6 +541,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	loc := scope.Stack.peek()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	fmt.Printf(" (%v) -> %v", loc.Hex(), val.Hex())
 	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
@@ -527,6 +549,7 @@ func opSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func opSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	loc := scope.Stack.pop()
 	val := scope.Stack.pop()
+	fmt.Printf(" (%v,%v)", loc.Hex(), val.Hex())
 	interpreter.evm.StateDB.SetState(scope.Contract.Address(),
 		loc.Bytes32(), val.Bytes32())
 	return nil, nil
@@ -869,6 +892,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		integer := new(uint256.Int)
 		scope.Stack.push(integer.SetBytes(common.RightPadBytes(
 			scope.Contract.Code[startMin:endMin], pushByteSize)))
+		fmt.Printf(" %v",integer.Hex())
 
 		*pc += size
 		return nil, nil
@@ -879,6 +903,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 func makeDup(size int64) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		scope.Stack.dup(int(size))
+		fmt.Printf(" %v",scope.Stack.peek().Hex())
 		return nil, nil
 	}
 }

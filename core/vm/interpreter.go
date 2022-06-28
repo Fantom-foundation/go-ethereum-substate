@@ -19,6 +19,7 @@ package vm
 import (
 	"hash"
 	"sync/atomic"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -119,6 +120,12 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 
+	fmt.Printf("\ncontract %v:\n",contract.self.Address().Hex())
+	fmt.Printf("  (from: %v)\n",contract.Caller().Hex())
+	fmt.Printf("  (gas: %v)\n",contract.Gas)
+	fmt.Printf("  (input: %v)\n", input)
+
+
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -196,6 +203,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
+		fmt.Printf("%v: %v", pc,opCodeToString[op])
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
@@ -277,6 +285,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		case !operation.jumps:
 			pc++
 		}
+		fmt.Printf("\n")
 	}
 	return nil, nil
 }
