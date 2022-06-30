@@ -32,10 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/substate"
 	"github.com/ethereum/go-ethereum/trie"
-
-	// record-replay: import research
-	"github.com/ethereum/go-ethereum/research"
 )
 
 type revision struct {
@@ -122,10 +120,10 @@ type StateDB struct {
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
 
-	// record-replay: ResearchPreAlloc, ResearchPostAlloc, ResearchBlockHashes of StateDB
-	ResearchPreAlloc    research.SubstateAlloc
-	ResearchPostAlloc   research.SubstateAlloc
-	ResearchBlockHashes map[uint64]common.Hash
+	// record-replay: SubstatePreAlloc, SubstatePostAlloc, SubstateBlockHashes of StateDB
+	SubstatePreAlloc    substate.SubstateAlloc
+	SubstatePostAlloc   substate.SubstateAlloc
+	SubstateBlockHashes map[uint64]common.Hash
 }
 
 // New creates a new state from a given trie.
@@ -161,10 +159,10 @@ func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, laye
 		}
 	}
 
-	// record-replay: init StateDB.Research*
-	sdb.ResearchPreAlloc = make(research.SubstateAlloc)
-	sdb.ResearchPostAlloc = make(research.SubstateAlloc)
-	sdb.ResearchBlockHashes = make(map[uint64]common.Hash)
+	// record-replay: init StateDB.Substate*
+	sdb.SubstatePreAlloc = make(substate.SubstateAlloc)
+	sdb.SubstatePostAlloc = make(substate.SubstateAlloc)
+	sdb.SubstateBlockHashes = make(map[uint64]common.Hash)
 
 	return sdb, nil
 }
@@ -512,18 +510,18 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 
-		// record-replay: insert the account in StateDB.ResearchPreAlloc
-		if _, exist := s.ResearchPreAlloc[addr]; !exist {
-			s.ResearchPreAlloc[addr] = research.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+		// record-replay: insert the account in StateDB.SubstatePreAlloc
+		if _, exist := s.SubstatePreAlloc[addr]; !exist {
+			s.SubstatePreAlloc[addr] = substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 		}
 
 		return obj
 	}
 
-	// record-replay: insert empty account in StateDB.ResearchPreAlloc
+	// record-replay: insert empty account in StateDB.SubstatePreAlloc
 	// This will prevent insertion of new account created in txs
-	if _, exist := s.ResearchPreAlloc[addr]; !exist {
-		s.ResearchPreAlloc[addr] = nil
+	if _, exist := s.SubstatePreAlloc[addr]; !exist {
+		s.SubstatePreAlloc[addr] = nil
 	}
 
 	return nil
@@ -735,18 +733,18 @@ func (s *StateDB) Copy() *StateDB {
 		state.preimages[hash] = preimage
 	}
 
-	// record-replay: copy StateDB.Research*
-	state.ResearchPreAlloc = make(research.SubstateAlloc)
-	state.ResearchPostAlloc = make(research.SubstateAlloc)
-	state.ResearchBlockHashes = make(map[uint64]common.Hash)
-	for addr, account := range s.ResearchPreAlloc {
-		state.ResearchPreAlloc[addr] = account.Copy()
+	// record-replay: copy StateDB.Substate*
+	state.SubstatePreAlloc = make(substate.SubstateAlloc)
+	state.SubstatePostAlloc = make(substate.SubstateAlloc)
+	state.SubstateBlockHashes = make(map[uint64]common.Hash)
+	for addr, account := range s.SubstatePreAlloc {
+		state.SubstatePreAlloc[addr] = account.Copy()
 	}
-	for addr, account := range s.ResearchPostAlloc {
-		state.ResearchPostAlloc[addr] = account.Copy()
+	for addr, account := range s.SubstatePostAlloc {
+		state.SubstatePostAlloc[addr] = account.Copy()
 	}
-	for num64, bhash := range s.ResearchBlockHashes {
-		state.ResearchBlockHashes[num64] = bhash
+	for num64, bhash := range s.SubstateBlockHashes {
+		state.SubstateBlockHashes[num64] = bhash
 	}
 
 	// Do we need to copy the access list? In practice: No. At the start of a
@@ -825,17 +823,17 @@ func (s *StateDB) GetRefund() uint64 {
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 	// record-replay: copy original storage values to Prestate and Poststate
-	for addr, sa := range s.ResearchPreAlloc {
+	for addr, sa := range s.SubstatePreAlloc {
 		if sa == nil {
-			delete(s.ResearchPreAlloc, addr)
+			delete(s.SubstatePreAlloc, addr)
 			continue
 		}
 
 		obj := s.stateObjects[addr]
-		for key := range obj.ResearchTouched {
+		for key := range obj.AccessedStorage {
 			sa.Storage[key] = obj.GetCommittedState(s.db, key)
 		}
-		s.ResearchPostAlloc[addr] = sa.Copy()
+		s.SubstatePostAlloc[addr] = sa.Copy()
 	}
 
 	addressesToPrefetch := make([][]byte, 0, len(s.journal.dirties))
@@ -863,17 +861,17 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
 
-			// record-replay: delete account from StateDB.ResearchPostAlloc
-			delete(s.ResearchPostAlloc, addr)
+			// record-replay: delete account from StateDB.SubstatePostAlloc
+			delete(s.SubstatePostAlloc, addr)
 
 		} else {
 
-			// record-replay: copy dirty account to StateDB.ResearchPostAlloc
-			sa := research.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
-			for key := range obj.ResearchTouched {
+			// record-replay: copy dirty account to StateDB.SubstatePostAlloc
+			sa := substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+			for key := range obj.AccessedStorage {
 				sa.Storage[key] = obj.GetState(s.db, key)
 			}
-			s.ResearchPostAlloc[addr] = sa
+			s.SubstatePostAlloc[addr] = sa
 
 			obj.finalise(true) // Prefetch slots in the background
 		}
@@ -959,12 +957,12 @@ func (s *StateDB) Prepare(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
 
-	// record-replay: reset StateDB.Research* and stateObject.Research*
-	s.ResearchPreAlloc = make(research.SubstateAlloc)
-	s.ResearchPostAlloc = make(research.SubstateAlloc)
-	s.ResearchBlockHashes = make(map[uint64]common.Hash)
+	// record-replay: reset StateDB.Substate* and stateObject.Substate*
+	s.SubstatePreAlloc = make(substate.SubstateAlloc)
+	s.SubstatePostAlloc = make(substate.SubstateAlloc)
+	s.SubstateBlockHashes = make(map[uint64]common.Hash)
 	for _, obj := range s.stateObjects {
-		obj.ResearchTouched = make(map[common.Hash]struct{})
+		obj.AccessedStorage = make(map[common.Hash]struct{})
 	}
 
 	s.accessList = newAccessList()

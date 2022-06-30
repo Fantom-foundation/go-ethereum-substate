@@ -1,4 +1,4 @@
-package research
+package substate
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ var (
 	SubstateDirFlag = cli.StringFlag{
 		Name:  "substatedir",
 		Usage: "Data directory for substate recorder/replayer",
-		Value: "./substate.ethereum",
+		Value: "./substate.fantom",
 	}
 	substateDir      = SubstateDirFlag.Value
 	staticSubstateDB *SubstateDB

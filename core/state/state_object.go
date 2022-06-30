@@ -91,8 +91,8 @@ type stateObject struct {
 	suicided  bool
 	deleted   bool
 
-	// record-replay: stateObject.ResearchTouched
-	ResearchTouched map[common.Hash]struct{}
+	// record-replay: stateObject.AccessedStorage
+	AccessedStorage map[common.Hash]struct{}
 }
 
 // empty returns whether the account is considered empty.
@@ -129,8 +129,8 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
 
-		// record-replay: init stateObject.ResearchTouched
-		ResearchTouched: make(map[common.Hash]struct{}),
+		// record-replay: init stateObject.AccessedStorage
+		AccessedStorage: make(map[common.Hash]struct{}),
 	}
 }
 
@@ -185,8 +185,8 @@ func (s *stateObject) getTrie(db Database) Trie {
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	// record-replay: mark keys touched by GetState
-	if _, exist := s.ResearchTouched[key]; !exist {
-		s.ResearchTouched[key] = struct{}{}
+	if _, exist := s.AccessedStorage[key]; !exist {
+		s.AccessedStorage[key] = struct{}{}
 	}
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
@@ -334,8 +334,8 @@ func (s *stateObject) finalise(prefetch bool) {
 		s.dirtyStorage = make(Storage)
 	}
 
-	// record-replay: clear stateObject.ResearchTouched
-	s.ResearchTouched = make(map[common.Hash]struct{})
+	// record-replay: clear stateObject.AccessedStorage
+	s.AccessedStorage = make(map[common.Hash]struct{})
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
@@ -476,10 +476,10 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
 
-	// record-replay: deepCopy stateObject.ResearchTouched
-	stateObject.ResearchTouched = make(map[common.Hash]struct{})
-	for key := range s.ResearchTouched {
-		stateObject.ResearchTouched[key] = struct{}{}
+	// record-replay: deepCopy stateObject.AccessedStorage
+	stateObject.AccessedStorage = make(map[common.Hash]struct{})
+	for key := range s.AccessedStorage {
+		stateObject.AccessedStorage[key] = struct{}{}
 	}
 
 	return stateObject

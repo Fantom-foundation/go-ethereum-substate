@@ -485,7 +485,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	defer func() {
 		statedb, ok := interpreter.evm.StateDB.(*state.StateDB)
 		if ok {
-			statedb.ResearchBlockHashes[num64] = common.BytesToHash(num.Bytes())
+			statedb.SubstateBlockHashes[num64] = common.BytesToHash(num.Bytes())
 		}
 	}()
 
