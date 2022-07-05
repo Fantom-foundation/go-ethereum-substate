@@ -14,15 +14,6 @@ var (
 		Usage: "Data directory for substate recorder/replayer",
 		Value: "./substate.fantom",
 	}
-	ChainIDFlag = cli.IntFlag{
-		Name:  "substatedir",
-		Usage: "Data directory for substate recorder/replayer",
-		Value: 250,
-	}
-	RecordingFlag = cli.BoolFlag{
-		Name: "recording, r",
-		Usage: "Enable recording",
-	}
 	substateDir      = SubstateDirFlag.Value
 	staticSubstateDB *SubstateDB
 	RecordReplay bool = false
