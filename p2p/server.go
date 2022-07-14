@@ -114,6 +114,16 @@ type Config struct {
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*enode.Node
 
+	// Broadcasting peers' info in the discovery mode can be ignored
+	// If this option is set to non-nil, the nodes which match one the the
+	// IPs contained in the list are not broadcasted.
+	ValidatorNodes []string `toml:",omitempty"`
+
+	// Connectivity can be restricted to certain sentry nodes
+	// If this option is set to a non-nil, only nodes which match one of the
+	// IPs contained in the list are considered.
+	SentryNodes []string `toml:",omitempty"`
+
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
@@ -592,6 +602,7 @@ func (srv *Server) setupDiscovery() error {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
+			SentryNodes: srv.SentryNodes,
 			Bootnodes:   srv.BootstrapNodes,
 			Unhandled:   unhandled,
 			Log:         srv.log,
@@ -609,6 +620,7 @@ func (srv *Server) setupDiscovery() error {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
+			SentryNodes: srv.SentryNodes,
 			Bootnodes:   srv.BootstrapNodesV5,
 			Log:         srv.log,
 		}
@@ -632,6 +644,7 @@ func (srv *Server) setupDialScheduler() {
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
+		sentryNodes:    srv.SentryNodes,
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
@@ -915,6 +928,10 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
 		return fmt.Errorf("not in netrestrict list")
+	}
+	// Reject connections that do not match sentry nodes.
+	if len(srv.SentryNodes) > 0 && !contains(srv.SentryNodes, remoteIP.String()) {
+		return fmt.Errorf("not in sentry nodes")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()

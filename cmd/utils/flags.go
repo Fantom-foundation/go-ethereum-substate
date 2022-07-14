@@ -656,6 +656,14 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
+	SentryNodeFlag = cli.StringFlag{
+		Name:  "sentrynodes",
+		Usage: "Restricts network communication to the given IP addresses",
+	}
+	ValidatorNodeFlag = cli.StringFlag{
+		Name:  "validatornodes",
+		Usage: "Validator node list for sentry node",
+	}
 	DNSDiscoveryFlag = cli.StringFlag{
 		Name:  "discovery.dns",
 		Usage: "Sets DNS discovery entry points (use \"\" to disable DNS)",
@@ -1195,6 +1203,14 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
 		cfg.NetRestrict = list
+	}
+
+	if sentrynodes := ctx.GlobalString(SentryNodeFlag.Name); sentrynodes != "" {
+		cfg.SentryNodes = netutil.ParseIPs(sentrynodes)
+	}
+
+	if validatornodes := ctx.GlobalString(ValidatorNodeFlag.Name); validatornodes != "" {
+		cfg.ValidatorNodes = netutil.ParseIPs(validatornodes)
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
