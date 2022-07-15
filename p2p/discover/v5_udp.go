@@ -142,16 +142,17 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:         conn,
-		localNode:    ln,
-		db:           ln.Database(),
-		netrestrict:  cfg.NetRestrict,
-		sentryNodes:  cfg.SentryNodes,
-		priv:         cfg.PrivateKey,
-		log:          cfg.Log,
-		validSchemes: cfg.ValidSchemes,
-		clock:        cfg.Clock,
-		trhandlers:   make(map[string]TalkRequestHandler),
+		conn:           conn,
+		localNode:      ln,
+		db:             ln.Database(),
+		netrestrict:    cfg.NetRestrict,
+		sentryNodes:    cfg.SentryNodes,
+		validatorNodes: cfg.ValidatorNodes,
+		priv:           cfg.PrivateKey,
+		log:            cfg.Log,
+		validSchemes:   cfg.ValidSchemes,
+		clock:          cfg.Clock,
+		trhandlers:     make(map[string]TalkRequestHandler),
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -819,6 +820,10 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 
 		// Apply some pre-checks to avoid sending invalid nodes.
 		for _, n := range bn {
+			// Get rid of validator node out of the found node
+			if len(t.validatorNodes) > 0 && has(t.validatorNodes, n.IP().String()) {
+				continue
+			}
 			// TODO livenessChecks > 1
 			if netutil.CheckRelayIP(rip, n.IP()) != nil {
 				continue
