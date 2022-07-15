@@ -312,12 +312,6 @@ func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
 		return nil, err
 	}
 	for _, n := range r {
-		if t.netrestrict != nil && !t.netrestrict.Contains(n.IP()) {
-			continue
-		}
-		if len(t.sentryNodes) > 0 && !has(t.sentryNodes, n.IP().String()) {
-			continue
-		}
 		if n.ID() != t.Self().ID() {
 			nodes.push(wrapNode(n), findnodeResultLimit)
 		}
@@ -415,6 +409,12 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
+	}
+	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+		return nil, errors.New("not contained in netrestrict list")
+	}
+	if len(t.sentryNodes) > 0 && !has(t.sentryNodes, node.IP().String()) {
+		return nil, errors.New("not contained in sentry nodes")
 	}
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
@@ -819,10 +819,6 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 
 		// Apply some pre-checks to avoid sending invalid nodes.
 		for _, n := range bn {
-			// Get rid of validator node out of the found node
-			if len(t.validatorNodes) > 0 && has(t.validatorNodes, n.IP().String()) {
-				continue
-			}
 			// TODO livenessChecks > 1
 			if netutil.CheckRelayIP(rip, n.IP()) != nil {
 				continue
