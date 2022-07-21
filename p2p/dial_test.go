@@ -152,6 +152,41 @@ func TestDialSchedNetRestrict(t *testing.T) {
 	})
 }
 
+func TestDialSchedIPRestrict(t *testing.T) {
+	t.Parallel()
+
+	nodes := []*enode.Node{
+		newNode(uintID(0x01), "127.0.0.1:30303"),
+		newNode(uintID(0x02), "127.0.0.2:30303"),
+		newNode(uintID(0x03), "127.0.0.3:30303"),
+		newNode(uintID(0x04), "127.0.0.4:30303"),
+		newNode(uintID(0x05), "127.0.2.5:30303"),
+		newNode(uintID(0x06), "127.0.2.6:30303"),
+		newNode(uintID(0x07), "127.0.2.7:30303"),
+		newNode(uintID(0x08), "127.0.2.8:30303"),
+	}
+	config := dialConfig{
+		maxActiveDials: 10,
+		maxDialPeers:   10,
+	}
+	config.ipRestrict = []string{"127.0.0.1", "127.0.2.8"}
+	runDialTest(t, config, []dialTestRound{
+		{
+			discovered: nodes,
+			wantNewDials: []*enode.Node{
+				newNode(uintID(0x01), "127.0.0.1:30303"),
+				newNode(uintID(0x08), "127.0.2.8:30303"),
+			},
+		},
+		{
+			succeeded: []enode.ID{
+				nodes[0].ID(),
+				nodes[7].ID(),
+			},
+		},
+	})
+}
+
 // This test checks that static dials work and obey the limits.
 func TestDialSchedStaticDial(t *testing.T) {
 	t.Parallel()

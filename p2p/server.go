@@ -117,12 +117,12 @@ type Config struct {
 	// Broadcasting peers' info in the discovery mode can be ignored
 	// If this option is set to non-nil, the nodes which match one the the
 	// IPs contained in the list are not broadcasted.
-	ValidatorNodes []string `toml:",omitempty"`
+	PrivateNodes []string `toml:",omitempty"`
 
-	// Connectivity can be restricted to certain sentry nodes
+	// Connectivity can be restricted to certain IP addresses
 	// If this option is set to a non-nil, only nodes which match one of the
 	// IPs contained in the list are considered.
-	SentryNodes []string `toml:",omitempty"`
+	IPRestrict []string `toml:",omitempty"`
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
@@ -602,7 +602,7 @@ func (srv *Server) setupDiscovery() error {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
-			SentryNodes: srv.SentryNodes,
+			IPRestrict:  srv.IPRestrict,
 			Bootnodes:   srv.BootstrapNodes,
 			Unhandled:   unhandled,
 			Log:         srv.log,
@@ -620,7 +620,7 @@ func (srv *Server) setupDiscovery() error {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
-			SentryNodes: srv.SentryNodes,
+			IPRestrict:  srv.IPRestrict,
 			Bootnodes:   srv.BootstrapNodesV5,
 			Log:         srv.log,
 		}
@@ -644,7 +644,7 @@ func (srv *Server) setupDialScheduler() {
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
-		sentryNodes:    srv.SentryNodes,
+		ipRestrict:     srv.IPRestrict,
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
@@ -929,9 +929,9 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
 		return fmt.Errorf("not in netrestrict list")
 	}
-	// Reject connections that do not match sentry nodes.
-	if len(srv.SentryNodes) > 0 && !contains(srv.SentryNodes, remoteIP.String()) {
-		return fmt.Errorf("not in sentry nodes")
+	// Reject connections that do not match IPRestrict.
+	if len(srv.IPRestrict) > 0 && !contains(srv.IPRestrict, remoteIP.String()) {
+		return fmt.Errorf("not in iprestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()

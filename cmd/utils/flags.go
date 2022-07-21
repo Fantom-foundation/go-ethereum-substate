@@ -656,13 +656,13 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
-	SentryNodeFlag = cli.StringFlag{
-		Name:  "sentrynodes",
+	IPrestrictFlag = cli.StringFlag{
+		Name:  "iprestrict",
 		Usage: "Restricts network communication to the given IP addresses",
 	}
-	ValidatorNodeFlag = cli.StringFlag{
-		Name:  "validatornodes",
-		Usage: "Validator node list for sentry node",
+	PrivateNodeFlag = cli.StringFlag{
+		Name:  "privatenodes",
+		Usage: "Set list of private nodes IP that not be advertise to public network",
 	}
 	DNSDiscoveryFlag = cli.StringFlag{
 		Name:  "discovery.dns",
@@ -1205,12 +1205,12 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if sentrynodes := ctx.GlobalString(SentryNodeFlag.Name); sentrynodes != "" {
-		cfg.SentryNodes = netutil.ParseIPs(sentrynodes)
+	if iprestrict := ctx.GlobalString(IPrestrictFlag.Name); iprestrict != "" {
+		cfg.IPRestrict = netutil.ParseIPs(iprestrict)
 	}
 
-	if validatornodes := ctx.GlobalString(ValidatorNodeFlag.Name); validatornodes != "" {
-		cfg.ValidatorNodes = netutil.ParseIPs(validatornodes)
+	if privatenodes := ctx.GlobalString(PrivateNodeFlag.Name); privatenodes != "" {
+		cfg.PrivateNodes = netutil.ParseIPs(privatenodes)
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {

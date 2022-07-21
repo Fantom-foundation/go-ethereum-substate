@@ -79,7 +79,7 @@ var (
 	errAlreadyListened  = errors.New("already listened")
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNetRestrict      = errors.New("not contained in netrestrict list")
-	errSentryNode       = errors.New("not contained in sentry nodes")
+	errIPRestrict       = errors.New("not contained in iprestrict list")
 	errNoPort           = errors.New("node does not provide TCP port")
 )
 
@@ -136,7 +136,7 @@ type dialConfig struct {
 	maxDialPeers   int              // maximum number of dialed peers
 	maxActiveDials int              // maximum number of active dials
 	netRestrict    *netutil.Netlist // IP netrestrict list, disabled if nil
-	sentryNodes    []string         // IP address restrict list, disabled if nil
+	ipRestrict     []string         // IP address restrict list, disabled if nil
 	resolver       nodeResolver
 	dialer         NodeDialer
 	log            log.Logger
@@ -407,8 +407,8 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if d.netRestrict != nil && !d.netRestrict.Contains(n.IP()) {
 		return errNetRestrict
 	}
-	if len(d.sentryNodes) > 0 && !contains(d.sentryNodes, n.IP().String()) {
-		return errSentryNode
+	if len(d.ipRestrict) > 0 && !contains(d.ipRestrict, n.IP().String()) {
+		return errIPRestrict
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
 		return errRecentlyDialed

@@ -62,17 +62,17 @@ type codecV5 interface {
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn           UDPConn
-	tab            *Table
-	netrestrict    *netutil.Netlist
-	sentryNodes    []string
-	validatorNodes []string
-	priv           *ecdsa.PrivateKey
-	localNode      *enode.LocalNode
-	db             *enode.DB
-	log            log.Logger
-	clock          mclock.Clock
-	validSchemes   enr.IdentityScheme
+	conn         UDPConn
+	tab          *Table
+	netrestrict  *netutil.Netlist
+	iprestrict   []string
+	privateNodes []string
+	priv         *ecdsa.PrivateKey
+	localNode    *enode.LocalNode
+	db           *enode.DB
+	log          log.Logger
+	clock        mclock.Clock
+	validSchemes enr.IdentityScheme
 
 	// talkreq handler registry
 	trlock     sync.Mutex
@@ -142,17 +142,17 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:           conn,
-		localNode:      ln,
-		db:             ln.Database(),
-		netrestrict:    cfg.NetRestrict,
-		sentryNodes:    cfg.SentryNodes,
-		validatorNodes: cfg.ValidatorNodes,
-		priv:           cfg.PrivateKey,
-		log:            cfg.Log,
-		validSchemes:   cfg.ValidSchemes,
-		clock:          cfg.Clock,
-		trhandlers:     make(map[string]TalkRequestHandler),
+		conn:         conn,
+		localNode:    ln,
+		db:           ln.Database(),
+		netrestrict:  cfg.NetRestrict,
+		iprestrict:   cfg.IPRestrict,
+		privateNodes: cfg.PrivateNodes,
+		priv:         cfg.PrivateKey,
+		log:          cfg.Log,
+		validSchemes: cfg.ValidSchemes,
+		clock:        cfg.Clock,
+		trhandlers:   make(map[string]TalkRequestHandler),
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -414,8 +414,8 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
-	if len(t.sentryNodes) > 0 && !has(t.sentryNodes, node.IP().String()) {
-		return nil, errors.New("not contained in sentry nodes")
+	if len(t.iprestrict) > 0 && !has(t.iprestrict, node.IP().String()) {
+		return nil, errors.New("not contained in iprestrict list")
 	}
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
@@ -820,8 +820,8 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 
 		// Apply some pre-checks to avoid sending invalid nodes.
 		for _, n := range bn {
-			// Get rid of validator node out of the found node
-			if len(t.validatorNodes) > 0 && has(t.validatorNodes, n.IP().String()) {
+			// Don't advertise the private nodes
+			if len(t.privateNodes) > 0 && has(t.privateNodes, n.IP().String()) {
 				continue
 			}
 			// TODO livenessChecks > 1

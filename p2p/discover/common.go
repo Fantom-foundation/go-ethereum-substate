@@ -41,14 +41,14 @@ type Config struct {
 	PrivateKey *ecdsa.PrivateKey
 
 	// These settings are optional:
-	NetRestrict    *netutil.Netlist   // list of allowed IP networks
-	SentryNodes    []string           // list of allowed IPs
-	ValidatorNodes []string           // list of validator IPs
-	Bootnodes      []*enode.Node      // list of bootstrap nodes
-	Unhandled      chan<- ReadPacket  // unhandled packets are sent on this channel
-	Log            log.Logger         // if set, log messages go here
-	ValidSchemes   enr.IdentityScheme // allowed identity schemes
-	Clock          mclock.Clock
+	NetRestrict  *netutil.Netlist   // list of allowed IP networks
+	IPRestrict   []string           // list of allowed IP addresses
+	PrivateNodes []string           // list of private IPs
+	Bootnodes    []*enode.Node      // list of bootstrap nodes
+	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
+	Log          log.Logger         // if set, log messages go here
+	ValidSchemes enr.IdentityScheme // allowed identity schemes
+	Clock        mclock.Clock
 }
 
 func (cfg Config) withDefaults() Config {

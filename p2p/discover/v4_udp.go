@@ -65,17 +65,17 @@ const (
 
 // UDPv4 implements the v4 wire protocol.
 type UDPv4 struct {
-	conn           UDPConn
-	log            log.Logger
-	netrestrict    *netutil.Netlist
-	sentryNodes    []string
-	validatorNodes []string
-	priv           *ecdsa.PrivateKey
-	localNode      *enode.LocalNode
-	db             *enode.DB
-	tab            *Table
-	closeOnce      sync.Once
-	wg             sync.WaitGroup
+	conn         UDPConn
+	log          log.Logger
+	netrestrict  *netutil.Netlist
+	iprestrict   []string
+	privateNodes []string
+	priv         *ecdsa.PrivateKey
+	localNode    *enode.LocalNode
+	db           *enode.DB
+	tab          *Table
+	closeOnce    sync.Once
+	wg           sync.WaitGroup
 
 	addReplyMatcher chan *replyMatcher
 	gotreply        chan reply
@@ -135,8 +135,8 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		conn:            c,
 		priv:            cfg.PrivateKey,
 		netrestrict:     cfg.NetRestrict,
-		sentryNodes:     cfg.SentryNodes,
-		validatorNodes:  cfg.ValidatorNodes,
+		iprestrict:      cfg.IPRestrict,
+		privateNodes:    cfg.PrivateNodes,
 		localNode:       ln,
 		db:              ln.Database(),
 		gotreply:        make(chan reply),
@@ -589,8 +589,8 @@ func (t *UDPv4) nodeFromRPC(sender *net.UDPAddr, rn v4wire.Node) (*node, error) 
 	if t.netrestrict != nil && !t.netrestrict.Contains(rn.IP) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
-	if len(t.sentryNodes) > 0 && !has(t.sentryNodes, rn.IP.String()) {
-		return nil, errors.New("not contained in sentry nodes")
+	if len(t.iprestrict) > 0 && !has(t.iprestrict, rn.IP.String()) {
+		return nil, errors.New("not contained in iprestrict list")
 	}
 	key, err := v4wire.DecodePubkey(crypto.S256(), rn.ID)
 	if err != nil {
@@ -735,8 +735,8 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
 	for _, n := range closest {
-		// Get rid of validator node out of the found node
-		if len(t.validatorNodes) > 0 && has(t.validatorNodes, n.IP().String()) {
+		// Don't advertise the private nodes
+		if len(t.privateNodes) > 0 && has(t.privateNodes, n.IP().String()) {
 			continue
 		}
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {
