@@ -812,6 +812,13 @@ running:
 			delete(restricts, ip)
 			srv.ntab.UpdateIPRestrict(restricts)
 
+			for _, n := range srv.StaticNodes {
+				if n.IP().String() == ip {
+					srv.dialsched.removeStatic(n)
+					srv.RemoveTrustedPeer(n)
+				}
+			}
+
 		case p := <-srv.addprivatenode:
 			srv.log.Warn("Adding private node", "node", p)
 			privates[p] = true

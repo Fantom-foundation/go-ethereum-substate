@@ -154,6 +154,7 @@ func (api *privateAdminAPI) RemoveIPRestrict(ip string) (bool, error) {
 	return true, nil
 }
 
+// AddPrivateNode add an ip not to be advertise to the other peers
 func (api *privateAdminAPI) AddPrivateNode(ip string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
@@ -167,6 +168,7 @@ func (api *privateAdminAPI) AddPrivateNode(ip string) (bool, error) {
 	return true, nil
 }
 
+// RemovePrivateNode remove ip out of non-advertise ip list
 func (api *privateAdminAPI) RemovePrivateNode(ip string) (bool, error) {
 	// Make sure the server is running, fail otherwise
 	server := api.node.Server()
