@@ -142,6 +142,26 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'addPrivateNode',
+			call: 'admin_addPrivateNode',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removePrivateNode',
+			call: 'admin_removePrivateNode',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addIPRestrict',
+			call: 'admin_addIPRestrict',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removeIPRestrict',
+			call: 'admin_removeIPRestrict',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'exportChain',
 			call: 'admin_exportChain',
 			params: 3,

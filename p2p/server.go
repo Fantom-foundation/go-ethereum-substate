@@ -199,6 +199,10 @@ type Server struct {
 	quit                    chan struct{}
 	addtrusted              chan *enode.Node
 	removetrusted           chan *enode.Node
+	addiprestrict           chan string
+	removeiprestrict        chan string
+	addprivatenode          chan string
+	removeprivatenode       chan string
 	peerOp                  chan peerOpFunc
 	peerOpDone              chan struct{}
 	delpeer                 chan peerDrop
@@ -380,6 +384,34 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	}
 }
 
+func (srv *Server) AddIPRestrict(ip string) {
+	select {
+	case srv.addiprestrict <- ip:
+	case <-srv.quit:
+	}
+}
+
+func (srv *Server) RemoveIPRestrict(ip string) {
+	select {
+	case srv.removeiprestrict <- ip:
+	case <-srv.quit:
+	}
+}
+
+func (srv *Server) AddPrivateNode(node string) {
+	select {
+	case srv.addprivatenode <- node:
+	case <-srv.quit:
+	}
+}
+
+func (srv *Server) RemovePrivateNode(node string) {
+	select {
+	case srv.removeprivatenode <- node:
+	case <-srv.quit:
+	}
+}
+
 // SubscribeEvents subscribes the given channel to peer events
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
@@ -477,6 +509,10 @@ func (srv *Server) Start() (err error) {
 	srv.checkpointAddPeer = make(chan *conn)
 	srv.addtrusted = make(chan *enode.Node)
 	srv.removetrusted = make(chan *enode.Node)
+	srv.addiprestrict = make(chan string)
+	srv.removeiprestrict = make(chan string)
+	srv.addprivatenode = make(chan string)
+	srv.removeprivatenode = make(chan string)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
@@ -726,11 +762,19 @@ func (srv *Server) run() {
 		peers        = make(map[enode.ID]*Peer)
 		inboundCount = 0
 		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
+		privates     = make(map[string]bool, len(srv.PrivateNodes))
+		restricts    = make(map[string]bool, len(srv.IPRestrict))
 	)
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
 	for _, n := range srv.TrustedNodes {
 		trusted[n.ID()] = true
+	}
+	for _, n := range srv.PrivateNodes {
+		privates[n] = true
+	}
+	for _, ip := range srv.IPRestrict {
+		restricts[ip] = true
 	}
 
 running:
@@ -757,6 +801,26 @@ running:
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(trustedConn, false)
 			}
+
+		case ip := <-srv.addiprestrict:
+			srv.log.Warn("Adding ip restrict", "ip", ip)
+			restricts[ip] = true
+			srv.ntab.UpdateIPRestrict(restricts)
+
+		case ip := <-srv.removeiprestrict:
+			srv.log.Warn("Removing ip restrict", "ip", ip)
+			delete(restricts, ip)
+			srv.ntab.UpdateIPRestrict(restricts)
+
+		case p := <-srv.addprivatenode:
+			srv.log.Warn("Adding private node", "node", p)
+			privates[p] = true
+			srv.ntab.UpdatePrivateNodes(privates)
+
+		case p := <-srv.removeprivatenode:
+			srv.log.Warn("Removing private node", "node", p)
+			delete(privates, p)
+			srv.ntab.UpdatePrivateNodes(privates)
 
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.

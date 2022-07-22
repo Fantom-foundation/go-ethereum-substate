@@ -204,6 +204,22 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
+func (t *UDPv4) UpdateIPRestrict(restricts map[string]bool) {
+	ips := []string{}
+	for ip, _ := range restricts {
+		ips = append(ips, ip)
+	}
+	t.iprestrict = ips
+}
+
+func (t *UDPv4) UpdatePrivateNodes(privates map[string]bool) {
+	ips := []string{}
+	for ip, _ := range privates {
+		ips = append(ips, ip)
+	}
+	t.iprestrict = ips
+}
+
 func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
 	n := t.Self()
 	a := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
