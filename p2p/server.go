@@ -808,10 +808,9 @@ running:
 			// If it's the first time to activate the ip restrict,
 			// then remove all the current peers that not in the ip restrict list
 			if len(restricts) == 0 {
-				for _, n := range srv.StaticNodes {
-					if n.IP().String() != ip {
-						srv.dialsched.removeStatic(n)
-						srv.RemoveTrustedPeer(n)
+				for _, c := range srv.dialsched.peers {
+					if c.node.IP().String() != ip {
+						srv.RemovePeer(c.node)
 					}
 				}
 			}
@@ -834,10 +833,9 @@ running:
 			srv.IPRestrict = ips
 			srv.ntab.UpdateIPRestrict(ips)
 
-			for _, n := range srv.StaticNodes {
-				if n.IP().String() == ip {
-					srv.dialsched.removeStatic(n)
-					srv.RemoveTrustedPeer(n)
+			for _, c := range srv.dialsched.peers {
+				if c.node.IP().String() == ip {
+					srv.RemovePeer(c.node)
 				}
 			}
 
