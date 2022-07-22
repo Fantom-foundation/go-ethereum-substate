@@ -18,6 +18,7 @@ package vm
 
 import (
 	"hash"
+	"time"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -158,6 +159,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
 		res     []byte // result of the opcode execution function
+		opCodeFrequency = map[OpCode]uint64{} // op-code frequency stats
+		opCodeDuration = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
+		pcCounterFrequency = map[uint64]uint64{} // pc-counter frequency stats
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -183,6 +187,19 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	steps := 0
+
+	// record the opcodes counts and length 
+	defer func() {
+		// compute frequency statistics for instructions
+		instructionFrequency := map[uint64]uint64{}
+		for _, ctr := range pcCounterFrequency {
+			instructionFrequency[ctr] ++
+		}
+
+		// add observations 
+		vmStats.UpdateStatistics(opCodeFrequency, opCodeDuration, instructionFrequency, steps)
+	}()
+
 	for {
 		steps++
 		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
@@ -196,6 +213,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
+		opCodeFrequency[op]++
+		pcCounterFrequency[pc]++
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
@@ -260,7 +279,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
+		start := time.Now()
 		res, err = operation.execute(&pc, in, callContext)
+		elapsed := time.Since(start)
+		opCodeDuration[op] += elapsed
+
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
 		if operation.returns {
