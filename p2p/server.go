@@ -811,6 +811,7 @@ running:
 				ips = append(ips, ip)
 			}
 			srv.IPRestrict = ips
+			srv.dialsched.updateIPRestrict(ips)
 			srv.ntab.UpdateIPRestrict(ips)
 
 		case ip := <-srv.removeiprestrict:
@@ -821,6 +822,7 @@ running:
 				ips = append(ips, ip)
 			}
 			srv.IPRestrict = ips
+			srv.dialsched.updateIPRestrict(ips)
 			srv.ntab.UpdateIPRestrict(ips)
 
 		case p := <-srv.addprivatenode:
