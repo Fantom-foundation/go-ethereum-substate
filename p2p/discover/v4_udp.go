@@ -204,11 +204,7 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
-func (t *UDPv4) UpdateIPRestrict(restricts map[string]bool) {
-	ips := []string{}
-	for ip, _ := range restricts {
-		ips = append(ips, ip)
-	}
+func (t *UDPv4) UpdateIPRestrict(ips []string) {
 	t.iprestrict = ips
 }
 

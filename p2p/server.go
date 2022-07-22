@@ -804,13 +804,35 @@ running:
 
 		case ip := <-srv.addiprestrict:
 			srv.log.Warn("Adding ip restrict", "ip", ip)
+
+			// If it's the first time to activate the ip restrict,
+			// then remove all the current peers that not in the ip restrict list
+			if len(restricts) == 0 {
+				for _, n := range srv.StaticNodes {
+					if n.IP().String() != ip {
+						srv.dialsched.removeStatic(n)
+						srv.RemoveTrustedPeer(n)
+					}
+				}
+			}
+
 			restricts[ip] = true
-			srv.ntab.UpdateIPRestrict(restricts)
+			ips := []string{}
+			for ip, _ := range restricts {
+				ips = append(ips, ip)
+			}
+			srv.IPRestrict = ips
+			srv.ntab.UpdateIPRestrict(ips)
 
 		case ip := <-srv.removeiprestrict:
 			srv.log.Warn("Removing ip restrict", "ip", ip)
 			delete(restricts, ip)
-			srv.ntab.UpdateIPRestrict(restricts)
+			ips := []string{}
+			for ip, _ := range restricts {
+				ips = append(ips, ip)
+			}
+			srv.IPRestrict = ips
+			srv.ntab.UpdateIPRestrict(ips)
 
 			for _, n := range srv.StaticNodes {
 				if n.IP().String() == ip {
