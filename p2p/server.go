@@ -805,16 +805,6 @@ running:
 		case ip := <-srv.addiprestrict:
 			srv.log.Trace("Adding ip restrict", "ip", ip)
 
-			// If it's the first time to activate the ip restrict,
-			// then remove all the current peers that not in the ip restrict list
-			if len(restricts) == 0 {
-				for _, c := range srv.dialsched.peers {
-					if c.node.IP().String() != ip {
-						srv.RemovePeer(c.node)
-					}
-				}
-			}
-
 			restricts[ip] = true
 			ips := []string{}
 			for ip, _ := range restricts {
@@ -832,12 +822,6 @@ running:
 			}
 			srv.IPRestrict = ips
 			srv.ntab.UpdateIPRestrict(ips)
-
-			for _, c := range srv.dialsched.peers {
-				if c.node.IP().String() == ip {
-					srv.RemovePeer(c.node)
-				}
-			}
 
 		case p := <-srv.addprivatenode:
 			srv.log.Trace("Adding private node", "node", p)
