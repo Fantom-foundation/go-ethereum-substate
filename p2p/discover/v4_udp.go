@@ -208,12 +208,8 @@ func (t *UDPv4) UpdateIPRestrict(ips []string) {
 	t.iprestrict = ips
 }
 
-func (t *UDPv4) UpdatePrivateNodes(privates map[string]bool) {
-	ips := []string{}
-	for ip, _ := range privates {
-		ips = append(ips, ip)
-	}
-	t.iprestrict = ips
+func (t *UDPv4) UpdatePrivateNodes(ips []string) {
+	t.privateNodes = ips
 }
 
 func (t *UDPv4) ourEndpoint() v4wire.Endpoint {

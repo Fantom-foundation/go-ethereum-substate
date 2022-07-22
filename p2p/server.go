@@ -803,7 +803,7 @@ running:
 			}
 
 		case ip := <-srv.addiprestrict:
-			srv.log.Warn("Adding ip restrict", "ip", ip)
+			srv.log.Trace("Adding ip restrict", "ip", ip)
 
 			// If it's the first time to activate the ip restrict,
 			// then remove all the current peers that not in the ip restrict list
@@ -825,7 +825,7 @@ running:
 			srv.ntab.UpdateIPRestrict(ips)
 
 		case ip := <-srv.removeiprestrict:
-			srv.log.Warn("Removing ip restrict", "ip", ip)
+			srv.log.Trace("Removing ip restrict", "ip", ip)
 			delete(restricts, ip)
 			ips := []string{}
 			for ip, _ := range restricts {
@@ -842,14 +842,24 @@ running:
 			}
 
 		case p := <-srv.addprivatenode:
-			srv.log.Warn("Adding private node", "node", p)
+			srv.log.Trace("Adding private node", "node", p)
 			privates[p] = true
-			srv.ntab.UpdatePrivateNodes(privates)
+			ips := []string{}
+			for ip, _ := range privates {
+				ips = append(ips, ip)
+			}
+			srv.PrivateNodes = ips
+			srv.ntab.UpdatePrivateNodes(ips)
 
 		case p := <-srv.removeprivatenode:
-			srv.log.Warn("Removing private node", "node", p)
+			srv.log.Trace("Removing private node", "node", p)
 			delete(privates, p)
-			srv.ntab.UpdatePrivateNodes(privates)
+			ips := []string{}
+			for ip, _ := range privates {
+				ips = append(ips, ip)
+			}
+			srv.PrivateNodes = ips
+			srv.ntab.UpdatePrivateNodes(ips)
 
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.
