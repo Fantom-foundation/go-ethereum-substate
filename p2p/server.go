@@ -838,13 +838,15 @@ running:
 			srv.IPRestrict = ips
 			srv.dialsched.updateIPRestrict(ips)
 			srv.ntab.UpdateIPRestrict(ips)
-			for _, c := range srv.dialsched.peers {
-				if c.node.IP().String() == ip {
-					if p, ok := peers[c.node.ID()]; ok {
-						delete(peers, c.node.ID())
-						srv.dialsched.peerRemoved(c)
-						if p.Inbound() {
-							inboundCount--
+			if len(restricts) > 0 {
+				for _, c := range srv.dialsched.peers {
+					if c.node.IP().String() == ip {
+						if p, ok := peers[c.node.ID()]; ok {
+							delete(peers, c.node.ID())
+							srv.dialsched.peerRemoved(c)
+							if p.Inbound() {
+								inboundCount--
+							}
 						}
 					}
 				}
