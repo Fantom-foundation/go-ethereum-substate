@@ -43,7 +43,7 @@ type Config struct {
 	// These settings are optional:
 	NetRestrict  *netutil.Netlist   // list of allowed IP networks
 	IPRestrict   []string           // list of allowed IP addresses
-	PrivateNodes []string           // list of private IPs
+	PrivateNodes []*enode.Node      // list of private enodes
 	Bootnodes    []*enode.Node      // list of bootstrap nodes
 	Unhandled    chan<- ReadPacket  // unhandled packets are sent on this channel
 	Log          log.Logger         // if set, log messages go here
@@ -87,6 +87,16 @@ func min(x, y int) int {
 func has(s []string, str string) bool {
 	for _, v := range s {
 		if v == str {
+			return true
+		}
+	}
+
+	return false
+}
+
+func containsEnode(nodes []*enode.Node, node *enode.Node) bool {
+	for _, n := range nodes {
+		if n.IP().Equal(node.IP()) || n.ID() == node.ID() {
 			return true
 		}
 	}

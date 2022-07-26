@@ -115,9 +115,9 @@ type Config struct {
 	TrustedNodes []*enode.Node
 
 	// Broadcasting peers' info in the discovery mode can be ignored
-	// If this option is set to non-nil, the nodes which match one the the
-	// IPs contained in the list are not broadcasted.
-	PrivateNodes []string `toml:",omitempty"`
+	// If this option is set to non-nil, the nodes which match one the
+	// IPs/enodes contained in the list are not broadcasted.
+	PrivateNodes []*enode.Node `toml:",omitempty"`
 
 	// Connectivity can be restricted to certain IP addresses
 	// If this option is set to a non-nil, only nodes which match one of the
@@ -600,12 +600,13 @@ func (srv *Server) setupDiscovery() error {
 			sconn = &sharedUDPConn{conn, unhandled}
 		}
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			IPRestrict:  srv.IPRestrict,
-			Bootnodes:   srv.BootstrapNodes,
-			Unhandled:   unhandled,
-			Log:         srv.log,
+			PrivateKey:   srv.PrivateKey,
+			NetRestrict:  srv.NetRestrict,
+			IPRestrict:   srv.IPRestrict,
+			PrivateNodes: srv.PrivateNodes,
+			Bootnodes:    srv.BootstrapNodes,
+			Unhandled:    unhandled,
+			Log:          srv.log,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -618,11 +619,12 @@ func (srv *Server) setupDiscovery() error {
 	// Discovery V5
 	if srv.DiscoveryV5 {
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			IPRestrict:  srv.IPRestrict,
-			Bootnodes:   srv.BootstrapNodesV5,
-			Log:         srv.log,
+			PrivateKey:   srv.PrivateKey,
+			NetRestrict:  srv.NetRestrict,
+			IPRestrict:   srv.IPRestrict,
+			PrivateNodes: srv.PrivateNodes,
+			Bootnodes:    srv.BootstrapNodesV5,
+			Log:          srv.log,
 		}
 		var err error
 		if sconn != nil {
@@ -726,19 +728,11 @@ func (srv *Server) run() {
 		peers        = make(map[enode.ID]*Peer)
 		inboundCount = 0
 		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
-		privates     = make(map[string]bool, len(srv.PrivateNodes))
-		restricts    = make(map[string]bool, len(srv.IPRestrict))
 	)
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
 	for _, n := range srv.TrustedNodes {
 		trusted[n.ID()] = true
-	}
-	for _, n := range srv.PrivateNodes {
-		privates[n] = true
-	}
-	for _, ip := range srv.IPRestrict {
-		restricts[ip] = true
 	}
 
 running:

@@ -326,7 +326,7 @@ func (api *publicAdminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
-func (api *publicAdminAPI) PrivateNodes() ([]string, error) {
+func (api *publicAdminAPI) PrivateNodes() ([]*enode.Node, error) {
 	server := api.node.Server()
 	if server == nil {
 		return nil, ErrNodeStopped

@@ -66,7 +66,7 @@ type UDPv5 struct {
 	tab          *Table
 	netrestrict  *netutil.Netlist
 	iprestrict   []string
-	privateNodes []string
+	privateNodes []*enode.Node
 	priv         *ecdsa.PrivateKey
 	localNode    *enode.LocalNode
 	db           *enode.DB
@@ -821,7 +821,7 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 		// Apply some pre-checks to avoid sending invalid nodes.
 		for _, n := range bn {
 			// Don't advertise the private nodes
-			if len(t.privateNodes) > 0 && has(t.privateNodes, n.IP().String()) {
+			if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, n) {
 				continue
 			}
 			// TODO livenessChecks > 1

@@ -69,7 +69,7 @@ type UDPv4 struct {
 	log          log.Logger
 	netrestrict  *netutil.Netlist
 	iprestrict   []string
-	privateNodes []string
+	privateNodes []*enode.Node
 	priv         *ecdsa.PrivateKey
 	localNode    *enode.LocalNode
 	db           *enode.DB
@@ -736,7 +736,7 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	var sent bool
 	for _, n := range closest {
 		// Don't advertise the private nodes
-		if len(t.privateNodes) > 0 && has(t.privateNodes, n.IP().String()) {
+		if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, &n.Node) {
 			continue
 		}
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {

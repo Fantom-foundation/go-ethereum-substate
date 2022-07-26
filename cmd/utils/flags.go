@@ -1210,7 +1210,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	}
 
 	if privatenodes := ctx.GlobalString(PrivateNodeFlag.Name); privatenodes != "" {
-		cfg.PrivateNodes = netutil.ParseIPs(privatenodes)
+		cfg.PrivateNodes = enode.ParseNodes(privatenodes)
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
