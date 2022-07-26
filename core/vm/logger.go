@@ -56,6 +56,11 @@ type LogConfig struct {
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
+// cli flags for micro profiling
+var ProfileEVMCall bool
+var ProfileEVMOpCode bool
+
+
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state

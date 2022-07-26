@@ -189,16 +189,21 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	steps := 0
 
 	// record the opcodes counts and length 
-	defer func() {
-		// compute frequency statistics for instructions
-		instructionFrequency := map[uint64]uint64{}
-		for _, ctr := range pcCounterFrequency {
-			instructionFrequency[ctr] ++
-		}
+	if (ProfileEVMOpCode) {
+		defer func() {
+			// compute frequency statistics for instructions
+			if !vmStats.isInitialized {
+				vmStats.Initialize()
+			}
+			instructionFrequency := map[uint64]uint64{}
+			for _, ctr := range pcCounterFrequency {
+				instructionFrequency[ctr] ++
+			}
 
-		// add observations 
-		vmStats.UpdateStatistics(opCodeFrequency, opCodeDuration, instructionFrequency, steps)
-	}()
+			// add observations
+			vmStats.UpdateStatistics(opCodeFrequency, opCodeDuration, instructionFrequency, steps)
+		}()
+	}
 
 	for {
 		steps++
@@ -213,8 +218,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
-		opCodeFrequency[op]++
-		pcCounterFrequency[pc]++
+		if (ProfileEVMOpCode) {
+			opCodeFrequency[op]++
+			pcCounterFrequency[pc]++
+		}
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
@@ -279,10 +286,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		start := time.Now()
-		res, err = operation.execute(&pc, in, callContext)
-		elapsed := time.Since(start)
-		opCodeDuration[op] += elapsed
+		var start time.Time
+		if (ProfileEVMOpCode) {
+			start = time.Now()
+		}
+			res, err = operation.execute(&pc, in, callContext)
+		if (ProfileEVMOpCode) {
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed
+		}
 
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
