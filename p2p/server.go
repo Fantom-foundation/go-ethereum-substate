@@ -199,10 +199,6 @@ type Server struct {
 	quit                    chan struct{}
 	addtrusted              chan *enode.Node
 	removetrusted           chan *enode.Node
-	addiprestrict           chan string
-	removeiprestrict        chan string
-	addprivatenode          chan string
-	removeprivatenode       chan string
 	peerOp                  chan peerOpFunc
 	peerOpDone              chan struct{}
 	delpeer                 chan peerDrop
@@ -384,34 +380,6 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	}
 }
 
-func (srv *Server) AddIPRestrict(ip string) {
-	select {
-	case srv.addiprestrict <- ip:
-	case <-srv.quit:
-	}
-}
-
-func (srv *Server) RemoveIPRestrict(ip string) {
-	select {
-	case srv.removeiprestrict <- ip:
-	case <-srv.quit:
-	}
-}
-
-func (srv *Server) AddPrivateNode(node string) {
-	select {
-	case srv.addprivatenode <- node:
-	case <-srv.quit:
-	}
-}
-
-func (srv *Server) RemovePrivateNode(node string) {
-	select {
-	case srv.removeprivatenode <- node:
-	case <-srv.quit:
-	}
-}
-
 // SubscribeEvents subscribes the given channel to peer events
 func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
@@ -509,10 +477,6 @@ func (srv *Server) Start() (err error) {
 	srv.checkpointAddPeer = make(chan *conn)
 	srv.addtrusted = make(chan *enode.Node)
 	srv.removetrusted = make(chan *enode.Node)
-	srv.addiprestrict = make(chan string)
-	srv.removeiprestrict = make(chan string)
-	srv.addprivatenode = make(chan string)
-	srv.removeprivatenode = make(chan string)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
@@ -801,76 +765,6 @@ running:
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(trustedConn, false)
 			}
-
-		case ip := <-srv.addiprestrict:
-			srv.log.Trace("Adding ip restrict", "ip", ip)
-
-			if len(restricts) == 0 {
-				for _, c := range srv.dialsched.peers {
-					if c.node.IP().String() != ip {
-						if p, ok := peers[c.node.ID()]; ok {
-							delete(peers, c.node.ID())
-							srv.dialsched.peerRemoved(c)
-							if p.Inbound() {
-								inboundCount--
-							}
-						}
-					}
-				}
-			}
-
-			restricts[ip] = true
-			ips := []string{}
-			for ip, _ := range restricts {
-				ips = append(ips, ip)
-			}
-			srv.IPRestrict = ips
-			srv.dialsched.updateIPRestrict(ips)
-			srv.ntab.UpdateIPRestrict(ips)
-
-		case ip := <-srv.removeiprestrict:
-			srv.log.Trace("Removing ip restrict", "ip", ip)
-			delete(restricts, ip)
-			ips := []string{}
-			for ip, _ := range restricts {
-				ips = append(ips, ip)
-			}
-			srv.IPRestrict = ips
-			srv.dialsched.updateIPRestrict(ips)
-			srv.ntab.UpdateIPRestrict(ips)
-			if len(restricts) > 0 {
-				for _, c := range srv.dialsched.peers {
-					if c.node.IP().String() == ip {
-						if p, ok := peers[c.node.ID()]; ok {
-							delete(peers, c.node.ID())
-							srv.dialsched.peerRemoved(c)
-							if p.Inbound() {
-								inboundCount--
-							}
-						}
-					}
-				}
-			}
-
-		case p := <-srv.addprivatenode:
-			srv.log.Trace("Adding private node", "node", p)
-			privates[p] = true
-			ips := []string{}
-			for ip, _ := range privates {
-				ips = append(ips, ip)
-			}
-			srv.PrivateNodes = ips
-			srv.ntab.UpdatePrivateNodes(ips)
-
-		case p := <-srv.removeprivatenode:
-			srv.log.Trace("Removing private node", "node", p)
-			delete(privates, p)
-			ips := []string{}
-			for ip, _ := range privates {
-				ips = append(ips, ip)
-			}
-			srv.PrivateNodes = ips
-			srv.ntab.UpdatePrivateNodes(ips)
 
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.

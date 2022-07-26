@@ -19,7 +19,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -123,62 +122,6 @@ func (api *privateAdminAPI) RemoveTrustedPeer(url string) (bool, error) {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
 	server.RemoveTrustedPeer(node)
-	return true, nil
-}
-
-// AddIPRestrict allow an ip to connect
-func (api *privateAdminAPI) AddIPRestrict(ip string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	if node := net.ParseIP(ip); node == nil {
-		return false, fmt.Errorf("invalid ip address: %v", ip)
-	}
-	server.AddIPRestrict(ip)
-	return true, nil
-}
-
-// RemoveIPRestrict remove ip from the restrict allow ip list
-func (api *privateAdminAPI) RemoveIPRestrict(ip string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	if node := net.ParseIP(ip); node == nil {
-		return false, fmt.Errorf("invalid ip address: %v", ip)
-	}
-	server.RemoveIPRestrict(ip)
-	return true, nil
-}
-
-// AddPrivateNode add an ip not to be advertise to the other peers
-func (api *privateAdminAPI) AddPrivateNode(ip string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	if node := net.ParseIP(ip); node == nil {
-		return false, fmt.Errorf("invalid node address: %v", ip)
-	}
-	server.AddPrivateNode(ip)
-	return true, nil
-}
-
-// RemovePrivateNode remove ip out of non-advertise ip list
-func (api *privateAdminAPI) RemovePrivateNode(ip string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	if node := net.ParseIP(ip); node == nil {
-		return false, fmt.Errorf("invalid node address: %v", ip)
-	}
-	server.RemovePrivateNode(ip)
 	return true, nil
 }
 

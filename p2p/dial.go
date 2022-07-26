@@ -95,22 +95,21 @@ var (
 //
 type dialScheduler struct {
 	dialConfig
-	setupFunc          dialSetupFunc
-	wg                 sync.WaitGroup
-	cancel             context.CancelFunc
-	ctx                context.Context
-	nodesIn            chan *enode.Node
-	doneCh             chan *dialTask
-	addStaticCh        chan *enode.Node
-	remStaticCh        chan *enode.Node
-	addPeerCh          chan *conn
-	remPeerCh          chan *conn
-	updateIPRestrictCh chan []string
+	setupFunc   dialSetupFunc
+	wg          sync.WaitGroup
+	cancel      context.CancelFunc
+	ctx         context.Context
+	nodesIn     chan *enode.Node
+	doneCh      chan *dialTask
+	addStaticCh chan *enode.Node
+	remStaticCh chan *enode.Node
+	addPeerCh   chan *conn
+	remPeerCh   chan *conn
 
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
 	dialing   map[enode.ID]*dialTask // active tasks
-	peers     map[enode.ID]*conn     // all connected peers
+	peers     map[enode.ID]connFlag  // all connected peers
 	dialPeers int                    // current number of dialed peers
 
 	// The static map tracks all static dial tasks. The subset of usable static dial tasks
@@ -166,18 +165,17 @@ func (cfg dialConfig) withDefaults() dialConfig {
 
 func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupFunc) *dialScheduler {
 	d := &dialScheduler{
-		dialConfig:         config.withDefaults(),
-		setupFunc:          setupFunc,
-		dialing:            make(map[enode.ID]*dialTask),
-		static:             make(map[enode.ID]*dialTask),
-		peers:              make(map[enode.ID]*conn),
-		doneCh:             make(chan *dialTask),
-		nodesIn:            make(chan *enode.Node),
-		addStaticCh:        make(chan *enode.Node),
-		remStaticCh:        make(chan *enode.Node),
-		addPeerCh:          make(chan *conn),
-		remPeerCh:          make(chan *conn),
-		updateIPRestrictCh: make(chan []string),
+		dialConfig:  config.withDefaults(),
+		setupFunc:   setupFunc,
+		dialing:     make(map[enode.ID]*dialTask),
+		static:      make(map[enode.ID]*dialTask),
+		peers:       make(map[enode.ID]connFlag),
+		doneCh:      make(chan *dialTask),
+		nodesIn:     make(chan *enode.Node),
+		addStaticCh: make(chan *enode.Node),
+		remStaticCh: make(chan *enode.Node),
+		addPeerCh:   make(chan *conn),
+		remPeerCh:   make(chan *conn),
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -191,13 +189,6 @@ func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupF
 func (d *dialScheduler) stop() {
 	d.cancel()
 	d.wg.Wait()
-}
-
-func (d *dialScheduler) updateIPRestrict(s []string) {
-	select {
-	case d.updateIPRestrictCh <- s:
-	case <-d.ctx.Done():
-	}
 }
 
 // addStatic adds a static dial candidate.
@@ -271,7 +262,7 @@ loop:
 				d.dialPeers++
 			}
 			id := c.node.ID()
-			d.peers[id] = c
+			d.peers[id] = c.flags
 			// Remove from static pool because the node is now connected.
 			task := d.static[id]
 			if task != nil && task.staticPoolIndex >= 0 {
@@ -285,10 +276,6 @@ loop:
 			}
 			delete(d.peers, c.node.ID())
 			d.updateStaticPool(c.node.ID())
-
-		case ips := <-d.updateIPRestrictCh:
-			d.log.Trace("Update ip restrict", "ips", ips)
-			d.ipRestrict = ips
 
 		case node := <-d.addStaticCh:
 			id := node.ID()
