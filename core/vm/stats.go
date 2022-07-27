@@ -78,7 +78,7 @@ func (d *VmMicroData) UpdateStatistics(opCodeFrequency map[OpCode]uint64, opCode
 	// step length frequency
 	value := d.stepLengthFrequency[stepLength]
 	value.Add(&value,new(big.Int).SetUint64(uint64(1)))
-
+        d.stepLengthFrequency[stepLength] = value
 	// release data set
 	d.mx.Unlock()
 }
