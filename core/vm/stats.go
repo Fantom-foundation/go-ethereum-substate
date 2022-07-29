@@ -97,7 +97,7 @@ func PrintStatistics() {
 	for opCode, duration := range vmStats.opCodeDuration {
 		seconds := new(big.Int)
 		seconds.Div(&duration, big.NewInt(int64(1000000000)))
-		fmt.Printf("opcode-total: %v,%v\n", opCodeToString[opCode], seconds.String())
+		fmt.Printf("opcode-runtime: %v,%v\n", opCodeToString[opCode], seconds.String())
 	}
 
 	// print instruction frequency
