@@ -78,7 +78,7 @@ func (d *VmMicroData) UpdateStatistics(opCodeFrequency map[OpCode]uint64, opCode
 	// step length frequency
 	value := d.stepLengthFrequency[stepLength]
 	value.Add(&value,new(big.Int).SetUint64(uint64(1)))
-
+        d.stepLengthFrequency[stepLength] = value
 	// release data set
 	d.mx.Unlock()
 }
@@ -97,7 +97,7 @@ func PrintStatistics() {
 	for opCode, duration := range vmStats.opCodeDuration {
 		seconds := new(big.Int)
 		seconds.Div(&duration, big.NewInt(int64(1000000000)))
-		fmt.Printf("opcode-total: %v,%v\n", opCodeToString[opCode], seconds.String())
+		fmt.Printf("opcode-runtime: %v,%v\n", opCodeToString[opCode], seconds.String())
 	}
 
 	// print instruction frequency
