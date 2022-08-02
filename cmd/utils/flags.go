@@ -662,7 +662,7 @@ var (
 	}
 	PrivateNodeFlag = cli.StringFlag{
 		Name:  "privatenodes",
-		Usage: "Set list of private nodes IP that not be advertise to public network",
+		Usage: "Comma separated enode URLs for not be advertise as peers to public network",
 	}
 	DNSDiscoveryFlag = cli.StringFlag{
 		Name:  "discovery.dns",
