@@ -79,6 +79,21 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	return New(validSchemes, &r)
 }
 
+func ParseNodes(s string) []*Node {
+	ws := strings.NewReplacer(" ", "", "\n", "", "\t", "")
+	urls := strings.Split(ws.Replace(s), ",")
+	nodes := make([]*Node, 0)
+	for _, url := range urls {
+		if url == "" {
+			continue
+		}
+		if node, err := Parse(ValidSchemes, url); err == nil {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+
 // ID returns the node identifier.
 func (n *Node) ID() ID {
 	return n.id

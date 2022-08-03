@@ -200,6 +200,14 @@ web3._extend({
 			getter: 'admin_peers'
 		}),
 		new web3._extend.Property({
+			name: 'privateNodes',
+			getter: 'admin_privateNodes'
+		}),
+		new web3._extend.Property({
+			name: 'iprestrict',
+			getter: 'admin_iprestrict'
+		}),
+		new web3._extend.Property({
 			name: 'datadir',
 			getter: 'admin_datadir'
 		}),

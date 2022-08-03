@@ -65,15 +65,17 @@ const (
 
 // UDPv4 implements the v4 wire protocol.
 type UDPv4 struct {
-	conn        UDPConn
-	log         log.Logger
-	netrestrict *netutil.Netlist
-	priv        *ecdsa.PrivateKey
-	localNode   *enode.LocalNode
-	db          *enode.DB
-	tab         *Table
-	closeOnce   sync.Once
-	wg          sync.WaitGroup
+	conn         UDPConn
+	log          log.Logger
+	netrestrict  *netutil.Netlist
+	iprestrict   []string
+	privateNodes []*enode.Node
+	priv         *ecdsa.PrivateKey
+	localNode    *enode.LocalNode
+	db           *enode.DB
+	tab          *Table
+	closeOnce    sync.Once
+	wg           sync.WaitGroup
 
 	addReplyMatcher chan *replyMatcher
 	gotreply        chan reply
@@ -133,6 +135,8 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		conn:            c,
 		priv:            cfg.PrivateKey,
 		netrestrict:     cfg.NetRestrict,
+		iprestrict:      cfg.IPRestrict,
+		privateNodes:    cfg.PrivateNodes,
 		localNode:       ln,
 		db:              ln.Database(),
 		gotreply:        make(chan reply),
@@ -585,6 +589,9 @@ func (t *UDPv4) nodeFromRPC(sender *net.UDPAddr, rn v4wire.Node) (*node, error) 
 	if t.netrestrict != nil && !t.netrestrict.Contains(rn.IP) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
+	if len(t.iprestrict) > 0 && !has(t.iprestrict, rn.IP.String()) {
+		return nil, errors.New("not contained in iprestrict list")
+	}
 	key, err := v4wire.DecodePubkey(crypto.S256(), rn.ID)
 	if err != nil {
 		return nil, err
@@ -728,6 +735,10 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
 	var sent bool
 	for _, n := range closest {
+		// Don't advertise the private nodes
+		if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, &n.Node) {
+			continue
+		}
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {
 			p.Nodes = append(p.Nodes, nodeToRPC(n))
 		}

@@ -326,6 +326,30 @@ func (api *publicAdminAPI) Datadir() string {
 	return api.node.DataDir()
 }
 
+func (api *publicAdminAPI) PrivateNodes() ([]*p2p.NodeInfo, error) {
+	server := api.node.Server()
+	if server == nil {
+		return nil, ErrNodeStopped
+	}
+	infos := make([]*p2p.NodeInfo, 0, len(server.PrivateNodes))
+	for _, node := range server.PrivateNodes {
+		infos = append(infos, &p2p.NodeInfo{
+			ID:    node.ID().String(),
+			Enode: node.URLv4(),
+			IP:    node.IP().String(),
+		})
+	}
+	return infos, nil
+}
+
+func (api *publicAdminAPI) Iprestrict() ([]string, error) {
+	server := api.node.Server()
+	if server == nil {
+		return nil, ErrNodeStopped
+	}
+	return server.IPRestrict, nil
+}
+
 // publicWeb3API offers helper utils
 type publicWeb3API struct {
 	stack *Node

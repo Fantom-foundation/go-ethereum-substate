@@ -656,6 +656,14 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
+	IPrestrictFlag = cli.StringFlag{
+		Name:  "iprestrict",
+		Usage: "Restricts network communication to the given IP addresses",
+	}
+	PrivateNodeFlag = cli.StringFlag{
+		Name:  "privatenodes",
+		Usage: "Comma separated enode URLs which must not be advertised as peers to public network",
+	}
 	DNSDiscoveryFlag = cli.StringFlag{
 		Name:  "discovery.dns",
 		Usage: "Sets DNS discovery entry points (use \"\" to disable DNS)",
@@ -1195,6 +1203,14 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
 		cfg.NetRestrict = list
+	}
+
+	if iprestrict := ctx.GlobalString(IPrestrictFlag.Name); iprestrict != "" {
+		cfg.IPRestrict = netutil.ParseIPs(iprestrict)
+	}
+
+	if privatenodes := ctx.GlobalString(PrivateNodeFlag.Name); privatenodes != "" {
+		cfg.PrivateNodes = enode.ParseNodes(privatenodes)
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {

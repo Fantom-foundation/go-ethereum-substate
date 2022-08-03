@@ -114,6 +114,16 @@ type Config struct {
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*enode.Node
 
+	// Broadcasting peers' info in the discovery mode can be ignored
+	// If this option is set to non-nil, the nodes which match one the
+	// IPs/enodes contained in the list are not broadcasted.
+	PrivateNodes []*enode.Node `toml:",omitempty"`
+
+	// Connectivity can be restricted to certain IP addresses
+	// If this option is set to a non-nil, only nodes which match one of the
+	// IPs contained in the list are considered.
+	IPRestrict []string `toml:",omitempty"`
+
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
@@ -590,11 +600,13 @@ func (srv *Server) setupDiscovery() error {
 			sconn = &sharedUDPConn{conn, unhandled}
 		}
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			Bootnodes:   srv.BootstrapNodes,
-			Unhandled:   unhandled,
-			Log:         srv.log,
+			PrivateKey:   srv.PrivateKey,
+			NetRestrict:  srv.NetRestrict,
+			IPRestrict:   srv.IPRestrict,
+			PrivateNodes: srv.PrivateNodes,
+			Bootnodes:    srv.BootstrapNodes,
+			Unhandled:    unhandled,
+			Log:          srv.log,
 		}
 		ntab, err := discover.ListenV4(conn, srv.localnode, cfg)
 		if err != nil {
@@ -607,10 +619,12 @@ func (srv *Server) setupDiscovery() error {
 	// Discovery V5
 	if srv.DiscoveryV5 {
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			Bootnodes:   srv.BootstrapNodesV5,
-			Log:         srv.log,
+			PrivateKey:   srv.PrivateKey,
+			NetRestrict:  srv.NetRestrict,
+			IPRestrict:   srv.IPRestrict,
+			PrivateNodes: srv.PrivateNodes,
+			Bootnodes:    srv.BootstrapNodesV5,
+			Log:          srv.log,
 		}
 		var err error
 		if sconn != nil {
@@ -632,6 +646,7 @@ func (srv *Server) setupDialScheduler() {
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
+		ipRestrict:     srv.IPRestrict,
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
@@ -915,6 +930,10 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 	// Reject connections that do not match NetRestrict.
 	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
 		return fmt.Errorf("not in netrestrict list")
+	}
+	// Reject connections that do not match IPRestrict.
+	if len(srv.IPRestrict) > 0 && !contains(srv.IPRestrict, remoteIP.String()) {
+		return fmt.Errorf("not in iprestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()

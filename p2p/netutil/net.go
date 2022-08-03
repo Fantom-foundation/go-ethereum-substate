@@ -87,6 +87,21 @@ func ParseNetlist(s string) (*Netlist, error) {
 	return &l, nil
 }
 
+func ParseIPs(s string) []string {
+	ws := strings.NewReplacer(" ", "", "\n", "", "\t", "")
+	ips := strings.Split(ws.Replace(s), ",")
+	l := make([]string, 0)
+	for _, ip := range ips {
+		if ip == "" {
+			continue
+		}
+		if n := net.ParseIP(ip); n != nil {
+			l = append(l, n.String())
+		}
+	}
+	return l
+}
+
 // MarshalTOML implements toml.MarshalerRec.
 func (l Netlist) MarshalTOML() interface{} {
 	list := make([]string, 0, len(l))
