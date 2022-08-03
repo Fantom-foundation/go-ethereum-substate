@@ -286,15 +286,56 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		var start time.Time
-		if (ProfileEVMOpCode) {
-			start = time.Now()
-		}
+		var ( start time.Time
+		      instructionTime time.Duration
+			)
+
+		if (op == CALL) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedCall(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else if (op == CALLCODE) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedCallCode(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else if (op == DELEGATECALL) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedDelegateCall(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else if (op == STATICCALL) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedStaticCall(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
 			res, err = operation.execute(&pc, in, callContext)
-		if (ProfileEVMOpCode) {
-			elapsed := time.Since(start)
-			opCodeDuration[op] += elapsed
-		}
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed
+			}
+		} 
 
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.

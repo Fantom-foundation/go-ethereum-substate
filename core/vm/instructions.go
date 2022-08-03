@@ -17,6 +17,9 @@
 package vm
 
 import (
+	"time"
+	"os"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -24,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/substate"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -654,6 +656,11 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 }
 
 func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+    panic("opCall() should not be used.")
+	return nil, nil
+}
+
+func opTimedCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, time.Duration, error) {
 	stack := scope.Stack
 	// Pop gas. The actual gas in interpreter.evm.callGasTemp.
 	// We can use this as a temporary value
@@ -674,7 +681,9 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		bigVal = value.ToBig()
 	}
 
+	start := time.Now()
 	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, bigVal)
+	elapsed := time.Since(start)	
 
 	if err != nil {
 		temp.Clear()
@@ -688,10 +697,15 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	scope.Contract.Gas += returnGas
 
-	return ret, nil
+	return ret, elapsed, nil
 }
 
 func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+    panic("opCallCode() should not be used.")
+	return nil, nil
+}
+
+func opTimedCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, time.Duration, error) {
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
 	stack := scope.Stack
 	// We use it as a temporary value
@@ -710,7 +724,10 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		bigVal = value.ToBig()
 	}
 
+	start := time.Now()
 	ret, returnGas, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, gas, bigVal)
+	elapsed := time.Since(start)
+
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -723,10 +740,16 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 	scope.Contract.Gas += returnGas
 
-	return ret, nil
+	return ret, elapsed, nil
 }
 
 func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	panic("opDelegateCall() should not be used.")
+
+	return nil, nil
+}
+
+func opTimedDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, time.Duration, error) {
 	stack := scope.Stack
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
 	// We use it as a temporary value
@@ -738,7 +761,10 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+	start := time.Now()
 	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
+	elapsed := time.Since(start)
+
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -751,10 +777,15 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	}
 	scope.Contract.Gas += returnGas
 
-	return ret, nil
+	return ret, elapsed, nil
 }
 
 func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	panic("opStaticCall() should not be used.")
+	return nil, nil
+}
+
+func opTimedStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, time.Duration, error) {
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
 	stack := scope.Stack
 	// We use it as a temporary value
@@ -766,7 +797,10 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
+	start := time.Now()
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	elapsed := time.Since(start)
+
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -779,7 +813,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	}
 	scope.Contract.Gas += returnGas
 
-	return ret, nil
+	return ret, elapsed, nil
 }
 
 func opReturn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
