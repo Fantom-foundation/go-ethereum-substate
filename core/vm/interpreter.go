@@ -290,7 +290,25 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		      instructionTime time.Duration
 			)
 
-		if (op == CALL) { 
+		if (op == CREATE) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedCreate(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else if (op == CREATE2) { 
+			if (ProfileEVMOpCode) {
+				start = time.Now()
+			}
+			res, instructionTime, err = opTimedCreate2(&pc, in, callContext)
+			if (ProfileEVMOpCode) {
+				elapsed := time.Since(start)
+				opCodeDuration[op] += elapsed - instructionTime
+			}
+		} else if (op == CALL) { 
 			if (ProfileEVMOpCode) {
 				start = time.Now()
 			}
