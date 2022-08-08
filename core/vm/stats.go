@@ -39,7 +39,6 @@ var vmStats VmMicroData
 func (d *VmMicroData) Initialize() {
 	d.mx.Lock()
 	if (!d.isInitialized) {
-		fmt.Println("initializing...")
 		d.opCodeFrequency = make(map[OpCode]big.Int)
 		d.opCodeDuration  = make(map[OpCode]big.Int)
 		d.instructionFrequency = make(map[uint64]big.Int)
