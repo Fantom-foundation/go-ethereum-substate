@@ -33,6 +33,10 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -66,9 +70,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
@@ -1205,12 +1206,19 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
+	var err error
 	if iprestrict := ctx.GlobalString(IPrestrictFlag.Name); iprestrict != "" {
-		cfg.IPRestrict = netutil.ParseIPs(iprestrict)
+		cfg.IPRestrict, err = netutil.ParseIPs(iprestrict)
+		if err != nil {
+			Fatalf("Option %q: %v", IPrestrictFlag.Name, err)
+		}
 	}
 
 	if privatenodes := ctx.GlobalString(PrivateNodeFlag.Name); privatenodes != "" {
-		cfg.PrivateNodes = enode.ParseNodes(privatenodes)
+		cfg.PrivateNodes, err = enode.ParseNodes(privatenodes)
+		if err != nil {
+			Fatalf("Option %q: %v", PrivateNodeFlag.Name, err)
+		}
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
