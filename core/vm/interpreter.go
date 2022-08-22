@@ -18,8 +18,8 @@ package vm
 
 import (
 	"hash"
-	"time"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -155,13 +155,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy  uint64 // needed for the deferred Tracer
-		gasCopy uint64 // for Tracer to log gas remaining before execution
-		logged  bool   // deferred Tracer should ignore already logged steps
-		res     []byte // result of the opcode execution function
-		opCodeFrequency = map[OpCode]uint64{} // op-code frequency stats
-		opCodeDuration = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
-		pcCounterFrequency = map[uint64]uint64{} // pc-counter frequency stats
+		pcCopy             uint64                       // needed for the deferred Tracer
+		gasCopy            uint64                       // for Tracer to log gas remaining before execution
+		logged             bool                         // deferred Tracer should ignore already logged steps
+		res                []byte                       // result of the opcode execution function
+		opCodeFrequency    = map[OpCode]uint64{}        // op-code frequency stats
+		opCodeDuration     = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
+		pcCounterFrequency = map[uint64]uint64{}        // pc-counter frequency stats
+		jumpDestFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
+
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -188,8 +190,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// parent context.
 	steps := 0
 
-	// record the opcodes counts and length 
-	if (ProfileEVMOpCode) {
+	// record the opcodes counts and length
+	if ProfileEVMOpCode {
 		defer func() {
 			// compute frequency statistics for instructions
 			if !vmStats.isInitialized {
@@ -197,11 +199,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 			instructionFrequency := map[uint64]uint64{}
 			for _, ctr := range pcCounterFrequency {
-				instructionFrequency[ctr] ++
+				instructionFrequency[ctr]++
 			}
 
 			// add observations
-			vmStats.UpdateStatistics(opCodeFrequency, opCodeDuration, instructionFrequency, steps)
+			vmStats.UpdateStatistics(contract.CodeAddr, opCodeFrequency, opCodeDuration, instructionFrequency, jumpDestFrequency, steps)
 		}()
 	}
 
@@ -218,7 +220,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
-		if (ProfileEVMOpCode) {
+		if ProfileEVMOpCode {
 			opCodeFrequency[op]++
 			pcCounterFrequency[pc]++
 		}
@@ -286,74 +288,79 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		// execute the operation
-		var ( start time.Time
-		      instructionTime time.Duration
-			)
+		var (
+			start           time.Time
+			instructionTime time.Duration
+		)
 
-		if (op == CREATE) { 
-			if (ProfileEVMOpCode) {
+		if ProfileEVMOpCode && op == JUMPDEST {
+			jumpDestFrequency[pc]++
+		}
+
+		if op == CREATE {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedCreate(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else if (op == CREATE2) { 
-			if (ProfileEVMOpCode) {
+		} else if op == CREATE2 {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedCreate2(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else if (op == CALL) { 
-			if (ProfileEVMOpCode) {
+		} else if op == CALL {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedCall(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else if (op == CALLCODE) { 
-			if (ProfileEVMOpCode) {
+		} else if op == CALLCODE {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedCallCode(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else if (op == DELEGATECALL) { 
-			if (ProfileEVMOpCode) {
+		} else if op == DELEGATECALL {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedDelegateCall(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else if (op == STATICCALL) { 
-			if (ProfileEVMOpCode) {
+		} else if op == STATICCALL {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, instructionTime, err = opTimedStaticCall(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed - instructionTime
 			}
-		} else { 
-			if (ProfileEVMOpCode) {
+		} else {
+			if ProfileEVMOpCode {
 				start = time.Now()
 			}
 			res, err = operation.execute(&pc, in, callContext)
-			if (ProfileEVMOpCode) {
+			if ProfileEVMOpCode {
 				elapsed := time.Since(start)
 				opCodeDuration[op] += elapsed
 			}
-		} 
+		}
 
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
