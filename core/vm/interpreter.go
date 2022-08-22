@@ -18,6 +18,8 @@ package vm
 
 import (
 	"hash"
+	syslog "log"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -39,6 +41,8 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 
 	StatePrecompiles map[common.Address]PrecompiledStateContract
+
+	InterpreterImpl string
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -57,8 +61,31 @@ type keccakState interface {
 	Read([]byte) (int, error)
 }
 
-// EVMInterpreter represents an EVM interpreter
-type EVMInterpreter struct {
+// EVMInterpreter defines an interface for different interpreter implementations.
+type EVMInterpreter interface {
+	// Run the contract's code with the given input data and returns the return byte-slice
+	// and an error if one occurred.
+	Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error)
+}
+
+type InterpreterFactory func(evm *EVM, cfg Config) EVMInterpreter
+
+var interpreter_registry = map[string]InterpreterFactory{}
+
+func RegisterInterpreterFactory(name string, factory InterpreterFactory) {
+	interpreter_registry[strings.ToLower(name)] = factory
+}
+
+func NewInterpreter(name string, evm *EVM, cfg Config) EVMInterpreter {
+	factory, found := interpreter_registry[strings.ToLower(name)]
+	if !found {
+		syslog.Fatalf("no factory for interpreter %s registered", name)
+	}
+	return factory(evm, cfg)
+}
+
+// GethEVMInterpreter is the default interpreter used by go-etherium.
+type GethEVMInterpreter struct {
 	evm *EVM
 	cfg Config
 
@@ -69,8 +96,14 @@ type EVMInterpreter struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
-// NewEVMInterpreter returns a new instance of the Interpreter.
-func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
+func init() {
+	RegisterInterpreterFactory("", func(evm *EVM, cfg Config) EVMInterpreter {
+		return NewEVMInterpreter(evm, cfg)
+	})
+}
+
+// newEVMInterpreter returns a new instance of the Interpreter.
+func NewEVMInterpreter(evm *EVM, cfg Config) *GethEVMInterpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
@@ -106,7 +139,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		cfg.JumpTable = jt
 	}
 
-	return &EVMInterpreter{
+	return &GethEVMInterpreter{
 		evm: evm,
 		cfg: cfg,
 	}
@@ -118,8 +151,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
-
+func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
