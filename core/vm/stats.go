@@ -21,6 +21,7 @@ import (
 	"time"
 	"math/big"
 	"sync"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // VM Micro Dataset for profiling
@@ -29,6 +30,7 @@ type VmMicroData struct {
 	opCodeDuration       map[OpCode]big.Int // accumulated duration of opcodes
 	instructionFrequency map[uint64]big.Int // instruction frequency statistics
 	stepLengthFrequency  map[int]big.Int // smart contract length frequency
+	jumpDestFrequency    map[common.Address]map[uint64]uint64  // Jump dest frequency statistics
 	isInitialized        bool
 	mx  sync.Mutex                          // mutex to protect micro dataset 
 }
@@ -43,13 +45,14 @@ func (d *VmMicroData) Initialize() {
 		d.opCodeDuration  = make(map[OpCode]big.Int)
 		d.instructionFrequency = make(map[uint64]big.Int)
 		d.stepLengthFrequency = make(map[int]big.Int)
+		d.jumpDestFrequency = make(map[common.Address]map[uint64]uint64)
 		d.isInitialized = true
 	}
 	d.mx.Unlock()
 }
 
 // update statistics
-func (d *VmMicroData) UpdateStatistics(opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, stepLength int) {
+func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, jumpDestFrequency map[uint64]uint64, stepLength int) {
 	// get access to dataset 
 	d.mx.Lock()
 
@@ -72,6 +75,14 @@ func (d *VmMicroData) UpdateStatistics(opCodeFrequency map[OpCode]uint64, opCode
 		value := d.instructionFrequency[instruction]
 		value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
 		d.instructionFrequency[instruction] = value
+	}
+
+	// update jump destination frequency
+	for jumpDestPc, freq := range jumpDestFrequency {
+		if (d.jumpDestFrequency[*contract] == nil) {
+			d.jumpDestFrequency[*contract] = make(map[uint64]uint64)
+		}
+		d.jumpDestFrequency[*contract][jumpDestPc] += freq
 	}
 
 	// step length frequency
