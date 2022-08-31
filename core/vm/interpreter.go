@@ -154,6 +154,70 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *GethEVMInterpreter {
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	state := InterpreterState{
+		Contract: contract,
+		Stack:    newstack(),
+		Memory:   NewMemory(),
+	}
+	defer returnStack(state.Stack)
+	return in.run(&state, input, readOnly)
+}
+
+func (in *GethEVMInterpreter) Start(contract *Contract, input []byte, readOnly bool) *InterpreterState {
+	state := InterpreterState{
+		Contract: contract,
+		Stack:    newstack(),
+		Memory:   NewMemory(),
+		next:     make(chan int),
+		done:     make(chan int),
+	}
+	go in.run(&state, input, readOnly)
+	return &state
+}
+
+type InterpreterState struct {
+	Contract *Contract
+	Stack    *Stack
+	Memory   *Memory
+	pc       uint64
+	finished bool
+
+	next chan int
+	done chan int
+}
+
+func (s *InterpreterState) IsDone() bool {
+	return s.finished
+}
+
+func (s *InterpreterState) GetCurrentOpCode() OpCode {
+	return s.Contract.GetOp(s.pc)
+}
+
+func (s *InterpreterState) Step() {
+	if !s.finished {
+		// Signal that next step should be processed
+		s.next <- 0
+		// Wait for signal that step has been processed
+		<-s.done
+	}
+}
+
+func (s *InterpreterState) Stop() {
+	close(s.next)
+	_, open := <-s.done
+	for open {
+		_, open = <-s.done
+	}
+}
+
+func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	defer func() {
+		state.finished = true
+		if state.done != nil {
+			close(state.done)
+		}
+	}()
 	// Increment the call depth which is restricted to 1024
 	in.evm.Depth++
 	defer func() { in.evm.Depth-- }()
@@ -170,14 +234,15 @@ func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly boo
 	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
-	if len(contract.Code) == 0 {
+	if len(state.Contract.Code) == 0 {
 		return nil, nil
 	}
 
 	var (
-		op          OpCode        // current opcode
-		mem         = NewMemory() // bound memory
-		stack       = newstack()  // local stack
+		contract    = state.Contract // processed contract
+		op          OpCode           // current opcode
+		mem         = state.Memory   // bound memory
+		stack       = state.Stack    // local stack
 		callContext = &ScopeContext{
 			Memory:   mem,
 			Stack:    stack,
@@ -202,9 +267,6 @@ func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly boo
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
-	defer func() {
-		returnStack(stack)
-	}()
 	contract.Input = input
 
 	if in.cfg.Debug {
@@ -242,6 +304,19 @@ func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly boo
 	}
 
 	for {
+		// Block until next step should be processed.
+		if state.next != nil {
+			state.pc = pc
+			// Signal completion of previous step.
+			if steps != 0 {
+				state.done <- 0
+			}
+			// Wait for processing of next step
+			_, open := <-state.next
+			if !open {
+				return
+			}
+		}
 		steps++
 		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
 			break
