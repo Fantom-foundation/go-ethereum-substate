@@ -2,6 +2,7 @@ package lfvm
 
 import (
 	"math/big"
+	"math/bits"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -42,14 +43,20 @@ func opPc(c *context) {
 	c.stack.pushEmpty().SetUint64(uint64(c.code[c.pc].arg))
 }
 
+func checkJumpDest(c *context) {
+	if int(c.pc+1) >= len(c.code) || c.code[c.pc+1].opcode != JUMPDEST {
+		c.SignalError(vm.ErrInvalidJump)
+	}
+	// Skip the interpretation of the JUMPDEST instruction
+	c.pc++
+	c.UseGas(1)
+}
+
 func opJump(c *context) {
 	destination := c.stack.pop()
 	// Update the PC to the jump destination -1 since interpreter will increase PC by 1 afterward.
 	c.pc = int32(destination.Uint64()) - 1
-
-	if int(c.pc+1) >= len(c.code) || c.code[c.pc+1].opcode != JUMPDEST {
-		c.SignalError(vm.ErrInvalidJump)
-	}
+	checkJumpDest(c)
 }
 
 func opJumpi(c *context) {
@@ -59,10 +66,7 @@ func opJumpi(c *context) {
 	if !condition.IsZero() {
 		// Update the PC to the jump destination -1 since interpreter will increase PC by 1 afterward.
 		c.pc = int32(destination.Uint64()) - 1
-
-		if int(c.pc+1) >= len(c.code) || c.code[c.pc+1].opcode != JUMPDEST {
-			c.SignalError(vm.ErrInvalidJump)
-		}
+		checkJumpDest(c)
 	}
 }
 
@@ -964,9 +968,40 @@ func opSwap2_Pop(c *context) {
 	*c.stack.Back(1) = *a1
 }
 
+func opPush1_Push1(c *context) {
+	arg := c.code[c.pc].arg
+	c.stack.stack_ptr += 2
+	c.stack.Back(0).SetUint64(uint64(arg & 0xFF))
+	c.stack.Back(1).SetUint64(uint64(arg >> 8))
+}
+
+func opPush1_Add(c *context) {
+	arg := c.code[c.pc].arg
+	trg := c.stack.peek()
+	var carry uint64
+	trg[0], carry = bits.Add64(trg[0], uint64(arg), 0)
+	trg[1], carry = bits.Add64(trg[1], 0, carry)
+	trg[2], carry = bits.Add64(trg[2], 0, carry)
+	trg[3], _ = bits.Add64(trg[3], 0, carry)
+}
+
+func opPush1_Shl(c *context) {
+	arg := c.code[c.pc].arg
+	trg := c.stack.peek()
+	trg.Lsh(trg, uint(arg))
+}
+
+func opPush1_Dup1(c *context) {
+	arg := c.code[c.pc].arg
+	c.stack.stack_ptr += 2
+	c.stack.Back(0).SetUint64(uint64(arg))
+	c.stack.Back(1).SetUint64(uint64(arg))
+}
+
 func opPush2_Jump(c *context) {
 	// Directly take pushed value and jump to destination.
 	c.pc = int32(c.code[c.pc].arg) - 1
+	checkJumpDest(c)
 }
 
 func opPush2_Jumpi(c *context) {
@@ -974,6 +1009,7 @@ func opPush2_Jumpi(c *context) {
 	condition := c.stack.pop()
 	if !condition.IsZero() {
 		c.pc = int32(c.code[c.pc].arg) - 1
+		checkJumpDest(c)
 	}
 }
 
@@ -984,9 +1020,42 @@ func opSwap2_Swap1(c *context) {
 	*a1, *a2, *a3 = *a2, *a3, *a1
 }
 
+func opDup2_Mstore(c *context) {
+	var value = c.stack.pop()
+	var addr = c.stack.peek()
+
+	offset := int(addr.Uint64())
+	c.memory.EnsureCapacity(offset, 32, c)
+	if c.status == RUNNING {
+		c.memory.SetWord(offset, value)
+	}
+}
+
+func opDup2_Lt(c *context) {
+	b := c.stack.Back(0)
+	a := c.stack.Back(1)
+	if a.Lt(b) {
+		b.SetOne()
+	} else {
+		b.Clear()
+	}
+}
+
+func opPopPop(c *context) {
+	c.stack.stack_ptr -= 2
+}
+
 func opPop_Jump(c *context) {
 	opPop(c)
 	opJump(c)
+}
+
+func opIsZero_Push2_Jumpi(c *context) {
+	condition := c.stack.pop()
+	if condition.IsZero() {
+		c.pc = int32(c.code[c.pc].arg) - 1
+		checkJumpDest(c)
+	}
 }
 
 func opSwap2_Swap1_Pop_Jump(c *context) {
@@ -1023,4 +1092,17 @@ func opPush1_Push4_Dup3(c *context) {
 func opAnd_Swap1_Pop_Swap2_Swap1(c *context) {
 	opAnd(c)
 	opSwap1_Pop_Swap2_Swap1(c)
+}
+
+func opPush1_Push1_Push1_Shl_Sub(c *context) {
+	arg1 := c.code[c.pc].arg
+	arg2 := c.code[c.pc+1].arg
+	shift := uint8(arg2)
+	value := uint8(arg1 & 0xFF)
+	delta := uint8(arg1 >> 8)
+	trg := c.stack.pushEmpty()
+	trg.SetUint64(uint64(value))
+	trg.Lsh(trg, uint(shift))
+	trg.Sub(trg, uint256.NewInt(uint64(delta)))
+	c.pc++
 }

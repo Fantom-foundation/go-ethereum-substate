@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -229,56 +230,128 @@ func runWithShadowInterpreter(c *context) {
 
 type entry struct {
 	value uint64
-	count int
+	count uint64
 }
 
-func getTopN(data map[uint64]int, n int) []entry {
+func getTopN(data map[uint64]uint64, n int) []entry {
 	list := make([]entry, 0, len(data))
 	for k, c := range data {
 		list = append(list, entry{k, c})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].count > list[j].count })
+	if len(list) < n {
+		return list
+	}
 	return list[0:n]
 }
 
-func runWithStatistics(c *context) {
-	single_count := map[uint64]int{}
-	pair_count := map[uint64]int{}
-	triple_count := map[uint64]int{}
-	quad_count := map[uint64]int{}
+type statistics struct {
+	count        uint64
+	single_count map[uint64]uint64
+	pair_count   map[uint64]uint64
+	triple_count map[uint64]uint64
+	quad_count   map[uint64]uint64
+}
 
-	var last, second_last, third_last uint64
-	for c.status == RUNNING {
-		cur := uint64(c.code[c.pc].opcode)
-		single_count[cur]++
-		pair_count[last<<16|cur]++
-		triple_count[second_last<<32|last<<16|cur]++
-		quad_count[third_last<<48|second_last<<32|last<<16|cur]++
-
-		last, second_last, third_last = cur, last, second_last
-
-		step(c)
+func newStatistics() statistics {
+	return statistics{
+		single_count: map[uint64]uint64{},
+		pair_count:   map[uint64]uint64{},
+		triple_count: map[uint64]uint64{},
+		quad_count:   map[uint64]uint64{},
 	}
+}
 
+func (s *statistics) Insert(src *statistics) {
+	s.count += src.count
+	for k, v := range src.single_count {
+		s.single_count[k] += v
+	}
+	for k, v := range src.pair_count {
+		s.pair_count[k] += v
+	}
+	for k, v := range src.triple_count {
+		s.triple_count[k] += v
+	}
+	for k, v := range src.quad_count {
+		s.quad_count[k] += v
+	}
+}
+
+func (s *statistics) Print() {
 	fmt.Printf("\n----- Statistiscs ------\n")
+	fmt.Printf("\nSteps: %d\n", s.count)
 	fmt.Printf("\nSingels:\n")
-	for _, e := range getTopN(single_count, 5) {
-		fmt.Printf("\t%-30v: %d\n", OpCode(e.value), e.count)
+	for _, e := range getTopN(s.single_count, 5) {
+		fmt.Printf("\t%-30v: %d (%.2f%%)\n", OpCode(e.value), e.count, float32(e.count*100)/float32(s.count))
 	}
 	fmt.Printf("\nPairs:\n")
-	for _, e := range getTopN(pair_count, 5) {
-		fmt.Printf("\t%-30v%-30v: %d\n", OpCode(e.value>>16), OpCode(e.value), e.count)
+	for _, e := range getTopN(s.pair_count, 5) {
+		fmt.Printf("\t%-30v%-30v: %d (%.2f%%)\n", OpCode(e.value>>16), OpCode(e.value), e.count, float32(e.count*100)/float32(s.count))
 	}
 	fmt.Printf("\nTriples:\n")
-	for _, e := range getTopN(triple_count, 5) {
-		fmt.Printf("\t%-30v%-30v%-30v: %d\n", OpCode(e.value>>32), OpCode(e.value>>16), OpCode(e.value), e.count)
+	for _, e := range getTopN(s.triple_count, 5) {
+		fmt.Printf("\t%-30v%-30v%-30v: %d (%.2f%%)\n", OpCode(e.value>>32), OpCode(e.value>>16), OpCode(e.value), e.count, float32(e.count*100)/float32(s.count))
 	}
 
 	fmt.Printf("\nQuads:\n")
-	for _, e := range getTopN(quad_count, 5) {
-		fmt.Printf("\t%-30v%-30v%-30v%-30v: %d\n", OpCode(e.value>>48), OpCode(e.value>>32), OpCode(e.value>>16), OpCode(e.value), e.count)
+	for _, e := range getTopN(s.quad_count, 5) {
+		fmt.Printf("\t%-30v%-30v%-30v%-30v: %d (%.2f%%)\n", OpCode(e.value>>48), OpCode(e.value>>32), OpCode(e.value>>16), OpCode(e.value), e.count, float32(e.count*100)/float32(s.count))
 	}
 	fmt.Printf("\n")
+}
+
+type stats_collector struct {
+	stats statistics
+
+	last        uint64
+	second_last uint64
+	third_last  uint64
+}
+
+func (s *stats_collector) NextOp(op OpCode) {
+	if op > 255 {
+		panic("Instruction sequence statistics does not support opcodes > 255")
+	}
+	cur := uint64(op)
+	s.stats.count++
+	s.stats.single_count[cur]++
+	if s.stats.count == 1 {
+		s.last, s.second_last, s.third_last = cur, s.last, s.second_last
+		return
+	}
+	s.stats.pair_count[s.last<<16|cur]++
+	if s.stats.count == 2 {
+		s.last, s.second_last, s.third_last = cur, s.last, s.second_last
+		return
+	}
+	s.stats.triple_count[s.second_last<<32|s.last<<16|cur]++
+	if s.stats.count == 3 {
+		s.last, s.second_last, s.third_last = cur, s.last, s.second_last
+		return
+	}
+	s.stats.quad_count[s.third_last<<48|s.second_last<<32|s.last<<16|cur]++
+	s.last, s.second_last, s.third_last = cur, s.last, s.second_last
+}
+
+var global_stats_mu = sync.Mutex{}
+var global_statistics = newStatistics()
+
+func PrintCollectedInstructionStatistics() {
+	global_stats_mu.Lock()
+	defer global_stats_mu.Unlock()
+	global_statistics.Print()
+}
+
+func runWithStatistics(c *context) {
+	stats := stats_collector{stats: newStatistics()}
+	for c.status == RUNNING {
+		stats.NextOp(c.code[c.pc].opcode)
+		step(c)
+	}
+	global_stats_mu.Lock()
+	defer global_stats_mu.Unlock()
+	global_statistics.Insert(&stats.stats)
 }
 
 func step(c *context) {
@@ -588,10 +661,20 @@ func step(c *context) {
 		opSwap1_Pop_Swap2_Swap1(c)
 	case POP_SWAP2_SWAP1_POP:
 		opPop_Swap2_Swap1_Pop(c)
+	case POP_POP:
+		opPopPop(c)
+	case PUSH1_SHL:
+		opPush1_Shl(c)
+	case PUSH1_ADD:
+		opPush1_Add(c)
+	case PUSH1_DUP1:
+		opPush1_Dup1(c)
 	case PUSH2_JUMP:
 		opPush2_Jump(c)
 	case PUSH2_JUMPI:
 		opPush2_Jumpi(c)
+	case PUSH1_PUSH1:
+		opPush1_Push1(c)
 	case SWAP1_POP:
 		opSwap1_Pop(c)
 	case POP_JUMP:
@@ -600,10 +683,18 @@ func step(c *context) {
 		opSwap2_Swap1(c)
 	case SWAP2_POP:
 		opSwap2_Pop(c)
+	case DUP2_MSTORE:
+		opDup2_Mstore(c)
+	case DUP2_LT:
+		opDup2_Lt(c)
+	case ISZERO_PUSH2_JUMPI:
+		opIsZero_Push2_Jumpi(c)
 	case PUSH1_PUSH4_DUP3:
 		opPush1_Push4_Dup3(c)
 	case AND_SWAP1_POP_SWAP2_SWAP1:
 		opAnd_Swap1_Pop_Swap2_Swap1(c)
+	case PUSH1_PUSH1_PUSH1_SHL_SUB:
+		opPush1_Push1_Push1_Shl_Sub(c)
 	default:
 		panic(fmt.Sprintf("Unsupported operation: %v", c.code[c.pc].opcode))
 	}

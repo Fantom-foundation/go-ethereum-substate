@@ -73,13 +73,24 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 	if with_super_instructions {
 		if len(code) > pos+7 {
 			op0 := vm.OpCode(code[pos])
-			op1 := vm.OpCode(code[pos+2])
-			op2 := vm.OpCode(code[pos+7])
-			if op0 == vm.PUSH1 && op1 == vm.PUSH4 && op2 == vm.DUP3 {
+			op1 := vm.OpCode(code[pos+1])
+			op2 := vm.OpCode(code[pos+2])
+			op3 := vm.OpCode(code[pos+3])
+			op4 := vm.OpCode(code[pos+4])
+			op5 := vm.OpCode(code[pos+5])
+			op6 := vm.OpCode(code[pos+6])
+			op7 := vm.OpCode(code[pos+7])
+			if op0 == vm.PUSH1 && op2 == vm.PUSH4 && op7 == vm.DUP3 {
 				return []Instruction{
-					{opcode: PUSH1_PUSH4_DUP3, arg: uint16(code[pos+1])},
-					{opcode: DATA, arg: uint16(code[pos+3])<<8 | uint16(code[pos+4])},
-					{opcode: DATA, arg: uint16(code[pos+5])<<8 | uint16(code[pos+6])},
+					{opcode: PUSH1_PUSH4_DUP3, arg: uint16(op1)},
+					{opcode: DATA, arg: uint16(op3)<<8 | uint16(op4)},
+					{opcode: DATA, arg: uint16(op5)<<8 | uint16(op6)},
+				}, 7, nil
+			}
+			if op0 == vm.PUSH1 && op2 == vm.PUSH1 && op4 == vm.PUSH1 && op6 == vm.SHL && op7 == vm.SUB {
+				return []Instruction{
+					{opcode: PUSH1_PUSH1_PUSH1_SHL_SUB, arg: uint16(op1)<<8 | uint16(op3)},
+					{opcode: DATA, arg: uint16(op5)},
 				}, 7, nil
 			}
 		}
@@ -91,6 +102,9 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			op4 := vm.OpCode(code[pos+4])
 			if op0 == vm.AND && op1 == vm.SWAP1 && op2 == vm.POP && op3 == vm.SWAP2 && op4 == vm.SWAP1 {
 				return []Instruction{{opcode: AND_SWAP1_POP_SWAP2_SWAP1}}, 4, nil
+			}
+			if op0 == vm.ISZERO && op1 == vm.PUSH2 && op4 == vm.JUMPI {
+				return []Instruction{{opcode: ISZERO_PUSH2_JUMPI, arg: uint16(op2)<<8 | uint16(op3)}}, 4, nil
 			}
 		}
 		if len(code) > pos+3 {
@@ -113,6 +127,23 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			if op0 == vm.PUSH2 && op3 == vm.JUMPI {
 				return []Instruction{{opcode: PUSH2_JUMPI, arg: uint16(op1)<<8 | uint16(op2)}}, 3, nil
 			}
+			if op0 == vm.PUSH1 && op2 == vm.PUSH1 {
+				return []Instruction{{opcode: PUSH1_PUSH1, arg: uint16(op1)<<8 | uint16(op3)}}, 3, nil
+			}
+		}
+		if len(code) > pos+2 {
+			op0 := vm.OpCode(code[pos])
+			op1 := vm.OpCode(code[pos+1])
+			op2 := vm.OpCode(code[pos+2])
+			if op0 == vm.PUSH1 && op2 == vm.ADD {
+				return []Instruction{{opcode: PUSH1_ADD, arg: uint16(op1)}}, 2, nil
+			}
+			if op0 == vm.PUSH1 && op2 == vm.SHL {
+				return []Instruction{{opcode: PUSH1_SHL, arg: uint16(op1)}}, 2, nil
+			}
+			if op0 == vm.PUSH1 && op2 == vm.DUP1 {
+				return []Instruction{{opcode: PUSH1_DUP1, arg: uint16(op1)}}, 2, nil
+			}
 		}
 		if len(code) > pos+1 {
 			op0 := vm.OpCode(code[pos])
@@ -123,11 +154,20 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			if op0 == vm.POP && op1 == vm.JUMP {
 				return []Instruction{{opcode: POP_JUMP}}, 1, nil
 			}
+			if op0 == vm.POP && op1 == vm.POP {
+				return []Instruction{{opcode: POP_POP}}, 1, nil
+			}
 			if op0 == vm.SWAP2 && op1 == vm.SWAP1 {
 				return []Instruction{{opcode: SWAP2_SWAP1}}, 1, nil
 			}
 			if op0 == vm.SWAP2 && op1 == vm.POP {
 				return []Instruction{{opcode: SWAP2_POP}}, 1, nil
+			}
+			if op0 == vm.DUP2 && op1 == vm.MSTORE {
+				return []Instruction{{opcode: DUP2_MSTORE}}, 1, nil
+			}
+			if op0 == vm.DUP2 && op1 == vm.LT {
+				return []Instruction{{opcode: DUP2_LT}}, 1, nil
 			}
 		}
 	}
