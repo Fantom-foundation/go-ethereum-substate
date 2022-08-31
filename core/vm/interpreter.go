@@ -97,9 +97,11 @@ type GethEVMInterpreter struct {
 }
 
 func init() {
-	RegisterInterpreterFactory("", func(evm *EVM, cfg Config) EVMInterpreter {
+	factory := func(evm *EVM, cfg Config) EVMInterpreter {
 		return NewEVMInterpreter(evm, cfg)
-	})
+	}
+	RegisterInterpreterFactory("", factory)
+	RegisterInterpreterFactory("geth", factory)
 }
 
 // newEVMInterpreter returns a new instance of the Interpreter.
