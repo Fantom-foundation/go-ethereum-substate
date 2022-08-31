@@ -27,13 +27,19 @@ import (
 	"time"
 )
 
+type BasicBlockKey struct {
+	Contract string
+	Instructions string
+	Address uint64
+}
+
 // VM Micro Dataset for profiling
 type VmMicroData struct {
 	opCodeFrequency      map[OpCode]big.Int                   // opcode frequency statistics
 	opCodeDuration       map[OpCode]big.Int                   // accumulated duration of opcodes
 	instructionFrequency map[uint64]big.Int                   // instruction frequency statistics
 	stepLengthFrequency  map[int]big.Int                      // smart contract length frequency
-	jumpDestFrequency    map[common.Address]map[uint64]uint64 // Jump dest frequency statistics
+	basicBlockFrequency  map[BasicBlockKey]uint64             // basic block statistics
 	isInitialized        bool
 	mx                   sync.Mutex // mutex to protect micro dataset
 }
@@ -48,14 +54,14 @@ func (d *VmMicroData) Initialize() {
 		d.opCodeDuration = make(map[OpCode]big.Int)
 		d.instructionFrequency = make(map[uint64]big.Int)
 		d.stepLengthFrequency = make(map[int]big.Int)
-		d.jumpDestFrequency = make(map[common.Address]map[uint64]uint64)
+		d.basicBlockFrequency = make(map[BasicBlockKey]uint64)
 		d.isInitialized = true
 	}
 	d.mx.Unlock()
 }
 
 // update statistics
-func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, jumpDestFrequency map[uint64]uint64, stepLength int) {
+func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, basicBlockFrequency map[uint64]BasicBlock, stepLength int) {
 	// get access to dataset
 	d.mx.Lock()
 
@@ -81,11 +87,12 @@ func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency
 	}
 
 	// update jump destination frequency
-	for jumpDestPc, freq := range jumpDestFrequency {
-		if d.jumpDestFrequency[*contract] == nil {
-			d.jumpDestFrequency[*contract] = make(map[uint64]uint64)
-		}
-		d.jumpDestFrequency[*contract][jumpDestPc] += freq
+	for addr, bb := range basicBlockFrequency {
+		bkey := BasicBlockKey {}
+		bkey.Contract = contract.String()
+		bkey.Address = addr
+		bkey.Instructions = string(bb.Instructions)
+		d.basicBlockFrequency[bkey] += bb.Frequency
 	}
 
 	// step length frequency
@@ -137,8 +144,8 @@ func PrintStatistics() {
 	defer db.Close()
 
 	// drop jump-dest table
-	const dropJumpDestFrequency string = `DROP TABLE IF EXISTS JumpDestFrequency;`
-	statement, err := db.Prepare(dropJumpDestFrequency)
+	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
+	statement, err := db.Prepare(dropBasicBlockFrequency)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -148,13 +155,14 @@ func PrintStatistics() {
 	}
 
 	// create new table
-	const createJumpDestFrequency string = `
-	CREATE TABLE JumpDestFrequency (
-	 contract TEXT, 	
-	 jumpdest NUMERIC,
+	const createBasicBlockFrequency string = `
+	CREATE TABLE BasicBlockFrequency (
+	 contract TEXT,
+	 address NUMERIC,
+	 instructions BLOB,
 	 frequency NUMERIC
 	);`
-	statement, err = db.Prepare(createJumpDestFrequency)
+	statement, err = db.Prepare(createBasicBlockFrequency)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -164,17 +172,15 @@ func PrintStatistics() {
 	}
 
 	// populate values
-	insertFrequency := `INSERT INTO JumpDestFrequency(contract, jumpdest, frequency) VALUES (?, ?, ?)`
+	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, instructions, frequency) VALUES (?, ?, ?, ?)`
 	statement, err = db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	for contract, freqMap := range vmStats.jumpDestFrequency {
-		for pc, freq := range freqMap {
-			_, err = statement.Exec(contract.String(), pc, freq)
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
+	for bkey, freq := range vmStats.basicBlockFrequency {
+		_, err = statement.Exec(bkey.Contract, bkey.Address, []byte(bkey.Instructions), freq)
+		if err != nil {
+			log.Fatalln(err.Error())
 		}
 	}
 
