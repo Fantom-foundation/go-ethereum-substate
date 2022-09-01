@@ -18,6 +18,7 @@ package vm
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -27,13 +28,19 @@ import (
 	"time"
 )
 
+type BasicBlockKey struct {
+	Contract     string
+	Instructions string
+	Address      uint64
+}
+
 // VM Micro Dataset for profiling
 type VmMicroData struct {
-	opCodeFrequency      map[OpCode]big.Int                   // opcode frequency statistics
-	opCodeDuration       map[OpCode]big.Int                   // accumulated duration of opcodes
-	instructionFrequency map[uint64]big.Int                   // instruction frequency statistics
-	stepLengthFrequency  map[int]big.Int                      // smart contract length frequency
-	jumpDestFrequency    map[common.Address]map[uint64]uint64 // Jump dest frequency statistics
+	opCodeFrequency      map[OpCode]big.Int       // opcode frequency statistics
+	opCodeDuration       map[OpCode]big.Int       // accumulated duration of opcodes
+	instructionFrequency map[uint64]big.Int       // instruction frequency statistics
+	stepLengthFrequency  map[int]big.Int          // smart contract length frequency
+	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
 	isInitialized        bool
 	mx                   sync.Mutex // mutex to protect micro dataset
 }
@@ -48,14 +55,14 @@ func (d *VmMicroData) Initialize() {
 		d.opCodeDuration = make(map[OpCode]big.Int)
 		d.instructionFrequency = make(map[uint64]big.Int)
 		d.stepLengthFrequency = make(map[int]big.Int)
-		d.jumpDestFrequency = make(map[common.Address]map[uint64]uint64)
+		d.basicBlockFrequency = make(map[BasicBlockKey]uint64)
 		d.isInitialized = true
 	}
 	d.mx.Unlock()
 }
 
 // update statistics
-func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, jumpDestFrequency map[uint64]uint64, stepLength int) {
+func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, basicBlockFrequency map[uint64]BasicBlock, stepLength int) {
 	// get access to dataset
 	d.mx.Lock()
 
@@ -80,12 +87,10 @@ func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency
 		d.instructionFrequency[instruction] = value
 	}
 
-	// update jump destination frequency
-	for jumpDestPc, freq := range jumpDestFrequency {
-		if d.jumpDestFrequency[*contract] == nil {
-			d.jumpDestFrequency[*contract] = make(map[uint64]uint64)
-		}
-		d.jumpDestFrequency[*contract][jumpDestPc] += freq
+	// update basic block frequency
+	for addr, bb := range basicBlockFrequency {
+		bkey := BasicBlockKey{Contract: contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
+		d.basicBlockFrequency[bkey] += bb.Frequency
 	}
 
 	// step length frequency
@@ -127,55 +132,82 @@ func PrintStatistics() {
 		fmt.Printf("steplen-freq: %v,%v\n", length, freq.String())
 	}
 
-	// Dump jump destination frequency statistics into a SQLITE3 database
+	// Dump basic-block frequency statistics into a SQLITE3 database
 
 	// open sqlite3 database
-	db, err := sql.Open("sqlite3", "./jumpdest.db") // Open the created SQLite File
+	db, err := sql.Open("sqlite3", "./basicblocks.db") // Open the created SQLite File
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	defer db.Close()
 
-	// drop jump-dest table
-	const dropJumpDestFrequency string = `DROP TABLE IF EXISTS JumpDestFrequency;`
-	statement, err := db.Prepare(dropJumpDestFrequency)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	_, err = statement.Exec()
+	// drop basic-block frequency table
+	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
+	_, err = db.Exec(dropBasicBlockFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 
 	// create new table
-	const createJumpDestFrequency string = `
-	CREATE TABLE JumpDestFrequency (
-	 contract TEXT, 	
-	 jumpdest NUMERIC,
+	const createBasicBlockFrequency string = `
+	CREATE TABLE BasicBlockFrequency (
+	 contract TEXT,
+	 address NUMERIC,
+	 instructions TEXT,
 	 frequency NUMERIC
 	);`
-	statement, err = db.Prepare(createJumpDestFrequency)
+	_, err = db.Exec(createBasicBlockFrequency)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalln(err.Error())
 	}
-	_, err = statement.Exec()
+
+	// switch synchronous mode off
+	_, err = db.Exec("PRAGMA synchronous = OFF;PRAGMA journal_mode = MEMORY;")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// begin Transaction
+	const beginTransaction string = `BEGIN TRANSACTION;`
+	const endTransaction string = `END TRANSACTION;`
+	_, err = db.Exec(beginTransaction)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 
 	// populate values
-	insertFrequency := `INSERT INTO JumpDestFrequency(contract, jumpdest, frequency) VALUES (?, ?, ?)`
-	statement, err = db.Prepare(insertFrequency)
+	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, instructions, frequency) VALUES (?, ?, ?, ?)`
+	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	for contract, freqMap := range vmStats.jumpDestFrequency {
-		for pc, freq := range freqMap {
-			_, err = statement.Exec(contract.String(), pc, freq)
+	ctr := 1
+	for bkey, freq := range vmStats.basicBlockFrequency {
+		// commit dataset after 10000 entries
+		if ctr >= 100000 {
+			ctr = 1
+			_, err = db.Exec(endTransaction)
 			if err != nil {
 				log.Fatalln(err.Error())
 			}
+			_, err = db.Exec(beginTransaction)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+		} else {
+			ctr++
 		}
+		_, err = statement.Exec(bkey.Contract, bkey.Address, bkey.Instructions, freq)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+	}
+
+	// end transaction
+	_, err = db.Exec(endTransaction)
+	if err != nil {
+		log.Fatalln(err.Error())
 	}
 
 	// release data set

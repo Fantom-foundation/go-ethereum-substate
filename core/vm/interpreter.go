@@ -49,6 +49,12 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
+// BasicBlock contains the instructions and the execution frequency.
+type BasicBlock struct {
+	Instructions []byte // instructions without parameters for PUSHx
+	Frequency    uint64 // dynamic execution frequency
+}
+
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
 // Read to get a variable amount of data from the hash state. Read is faster than Sum
 // because it doesn't copy the internal state, but also modifies the internal state.
@@ -155,14 +161,14 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy             uint64                       // needed for the deferred Tracer
-		gasCopy            uint64                       // for Tracer to log gas remaining before execution
-		logged             bool                         // deferred Tracer should ignore already logged steps
-		res                []byte                       // result of the opcode execution function
-		opCodeFrequency    = map[OpCode]uint64{}        // op-code frequency stats
-		opCodeDuration     = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
-		pcCounterFrequency = map[uint64]uint64{}        // pc-counter frequency stats
-		jumpDestFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
+		pcCopy              uint64                       // needed for the deferred Tracer
+		gasCopy             uint64                       // for Tracer to log gas remaining before execution
+		logged              bool                         // deferred Tracer should ignore already logged steps
+		res                 []byte                       // result of the opcode execution function
+		opCodeFrequency     = map[OpCode]uint64{}        // op-code frequency stats
+		opCodeDuration      = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
+		pcCounterFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
+		basicBlockFrequency = map[uint64]BasicBlock{}    // basic block map that translates an address to a basic block
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
@@ -203,7 +209,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 
 			// add observations
-			vmStats.UpdateStatistics(contract.CodeAddr, opCodeFrequency, opCodeDuration, instructionFrequency, jumpDestFrequency, steps)
+			vmStats.UpdateStatistics(contract.CodeAddr, opCodeFrequency, opCodeDuration, instructionFrequency, basicBlockFrequency, steps)
 		}()
 	}
 
@@ -294,7 +300,72 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		)
 
 		if ProfileEVMOpCode && op == JUMPDEST {
-			jumpDestFrequency[pc]++
+			if _, ok := basicBlockFrequency[pc]; !ok {
+				// basic block not found in frequency map
+				// => create new one
+				idx := pc
+				instructions := []byte{}
+				length := uint64(len(contract.Code))
+				for {
+
+					// exceed code size
+					if idx >= length {
+						break
+					}
+
+					// fetch op-code
+					op := contract.GetOp(idx)
+					instructions = append(instructions, byte(op))
+
+					// end of basic block?
+					if op == JUMP ||
+						op == JUMPI ||
+						op == STOP ||
+						op == RETURN ||
+						op == REVERT ||
+						op == SELFDESTRUCT {
+						break
+					}
+
+					// skip constant of a push operation
+					if op >= PUSH1 && op <= PUSH32 {
+						numbits := op - PUSH1 + 1
+						if numbits >= 8 {
+							for ; numbits >= 16; numbits -= 16 {
+								idx += 16
+							}
+							for ; numbits >= 8; numbits -= 8 {
+								idx += 8
+							}
+						}
+						switch numbits {
+						case 1:
+							idx += 1
+						case 2:
+							idx += 2
+						case 3:
+							idx += 3
+						case 4:
+							idx += 4
+						case 5:
+							idx += 5
+						case 6:
+							idx += 6
+						case 7:
+							idx += 7
+						}
+
+					}
+
+					// skip to next instruction
+					idx++
+				}
+				basicBlockFrequency[pc] = BasicBlock{Instructions: instructions, Frequency: 1}
+			} else {
+				bb := basicBlockFrequency[pc]
+				bb.Frequency++
+				basicBlockFrequency[pc] = bb
+			}
 		}
 
 		if op == CREATE {
