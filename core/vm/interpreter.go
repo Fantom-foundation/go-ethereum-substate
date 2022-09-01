@@ -18,6 +18,8 @@ package vm
 
 import (
 	"hash"
+	syslog "log"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -39,6 +41,8 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 
 	StatePrecompiles map[common.Address]PrecompiledStateContract
+
+	InterpreterImpl string
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -63,8 +67,31 @@ type keccakState interface {
 	Read([]byte) (int, error)
 }
 
-// EVMInterpreter represents an EVM interpreter
-type EVMInterpreter struct {
+// EVMInterpreter defines an interface for different interpreter implementations.
+type EVMInterpreter interface {
+	// Run the contract's code with the given input data and returns the return byte-slice
+	// and an error if one occurred.
+	Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error)
+}
+
+type InterpreterFactory func(evm *EVM, cfg Config) EVMInterpreter
+
+var interpreter_registry = map[string]InterpreterFactory{}
+
+func RegisterInterpreterFactory(name string, factory InterpreterFactory) {
+	interpreter_registry[strings.ToLower(name)] = factory
+}
+
+func NewInterpreter(name string, evm *EVM, cfg Config) EVMInterpreter {
+	factory, found := interpreter_registry[strings.ToLower(name)]
+	if !found {
+		syslog.Fatalf("no factory for interpreter %s registered", name)
+	}
+	return factory(evm, cfg)
+}
+
+// GethEVMInterpreter is the default interpreter used by go-etherium.
+type GethEVMInterpreter struct {
 	evm *EVM
 	cfg Config
 
@@ -75,8 +102,16 @@ type EVMInterpreter struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 }
 
-// NewEVMInterpreter returns a new instance of the Interpreter.
-func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
+func init() {
+	factory := func(evm *EVM, cfg Config) EVMInterpreter {
+		return NewEVMInterpreter(evm, cfg)
+	}
+	RegisterInterpreterFactory("", factory)
+	RegisterInterpreterFactory("geth", factory)
+}
+
+// newEVMInterpreter returns a new instance of the Interpreter.
+func NewEVMInterpreter(evm *EVM, cfg Config) *GethEVMInterpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
@@ -112,7 +147,7 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		cfg.JumpTable = jt
 	}
 
-	return &EVMInterpreter{
+	return &GethEVMInterpreter{
 		evm: evm,
 		cfg: cfg,
 	}
@@ -124,11 +159,74 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func (in *GethEVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	state := InterpreterState{
+		Contract: contract,
+		Stack:    newstack(),
+		Memory:   NewMemory(),
+	}
+	defer returnStack(state.Stack)
+	return in.run(&state, input, readOnly)
+}
 
+func (in *GethEVMInterpreter) Start(contract *Contract, input []byte, readOnly bool) *InterpreterState {
+	state := InterpreterState{
+		Contract: contract,
+		Stack:    newstack(),
+		Memory:   NewMemory(),
+		next:     make(chan int),
+		done:     make(chan int),
+	}
+	go in.run(&state, input, readOnly)
+	return &state
+}
+
+type InterpreterState struct {
+	Contract *Contract
+	Stack    *Stack
+	Memory   *Memory
+	pc       uint64
+	finished bool
+
+	next chan int
+	done chan int
+}
+
+func (s *InterpreterState) IsDone() bool {
+	return s.finished
+}
+
+func (s *InterpreterState) GetCurrentOpCode() OpCode {
+	return s.Contract.GetOp(s.pc)
+}
+
+func (s *InterpreterState) Step() {
+	if !s.finished {
+		// Signal that next step should be processed
+		s.next <- 0
+		// Wait for signal that step has been processed
+		<-s.done
+	}
+}
+
+func (s *InterpreterState) Stop() {
+	close(s.next)
+	_, open := <-s.done
+	for open {
+		_, open = <-s.done
+	}
+}
+
+func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	defer func() {
+		state.finished = true
+		if state.done != nil {
+			close(state.done)
+		}
+	}()
 	// Increment the call depth which is restricted to 1024
-	in.evm.depth++
-	defer func() { in.evm.depth-- }()
+	in.evm.Depth++
+	defer func() { in.evm.Depth-- }()
 
 	// Make sure the readOnly is only set if we aren't in readOnly yet.
 	// This also makes sure that the readOnly flag isn't removed for child calls.
@@ -142,14 +240,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
-	if len(contract.Code) == 0 {
+	if len(state.Contract.Code) == 0 {
 		return nil, nil
 	}
 
 	var (
-		op          OpCode        // current opcode
-		mem         = NewMemory() // bound memory
-		stack       = newstack()  // local stack
+		contract    = state.Contract // processed contract
+		op          OpCode           // current opcode
+		mem         = state.Memory   // bound memory
+		stack       = state.Stack    // local stack
 		callContext = &ScopeContext{
 			Memory:   mem,
 			Stack:    stack,
@@ -174,18 +273,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
-	defer func() {
-		returnStack(stack)
-	}()
 	contract.Input = input
 
 	if in.cfg.Debug {
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
 				} else {
-					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, callContext, in.evm.Depth, err)
 				}
 			}
 		}()
@@ -214,6 +310,19 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}
 
 	for {
+		// Block until next step should be processed.
+		if state.next != nil {
+			state.pc = pc
+			// Signal completion of previous step.
+			if steps != 0 {
+				state.done <- 0
+			}
+			// Wait for processing of next step
+			_, open := <-state.next
+			if !open {
+				return
+			}
+		}
 		steps++
 		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
 			break
@@ -289,7 +398,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
 			logged = true
 		}
 
