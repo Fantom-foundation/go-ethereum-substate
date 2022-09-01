@@ -62,8 +62,9 @@ type VmMicroData struct {
 var vmStats VmMicroData
 
 // queue adapted from here: https://www.sobyte.net/post/2021-07/implementing-lock-free-queues-with-go/
+// TODO: put it into new file 
 
-// unbounded lock-free
+// Unbounded lock-free for SmartContract Data
 type RecordQueue struct {
 	head unsafe.Pointer
 	tail unsafe.Pointer
@@ -135,9 +136,10 @@ func cas(p *unsafe.Pointer, old, new *RecordNode) (ok bool) {
 		p, unsafe.Pointer(old), unsafe.Pointer(new))
 }
 
-// queue
+// Record Queue 
 var recordQueue *RecordQueue = NewRecordQueue()
 
+// Initialize summary data-set
 func (d *VmMicroData) Initialize() {
 	d.mx.Lock()
 	if !d.isInitialized {
@@ -151,68 +153,79 @@ func (d *VmMicroData) Initialize() {
 	d.mx.Unlock()
 }
 
-var ops uint64 = 0
+var QueueSize uint64 = 0
+const QueueMaxSize = 100000
+
+// Flush the record queue and process records
+func (d *VmMicroData) FlushProcessQueue() {
+	// get access to dataset
+	d.mx.Lock()
+
+	// let only one process the queue (i.e. the first one in the lock observing 
+	// that the queue is filled)
+	for {
+		// pop all records and process them
+		scd := recordQueue.Dequeue()
+		if scd != nil {
+			// update opcode frequency
+			for opCode, freq := range scd.OpCodeFrequency {
+				value := d.opCodeFrequency[opCode]
+				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+				d.opCodeFrequency[opCode] = value
+			}
+
+			// update instruction opCodeDuration
+			for opCode, duration := range scd.OpCodeDuration {
+				value := d.opCodeDuration[opCode]
+				value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
+				d.opCodeDuration[opCode] = value
+			}
+
+			// update instruction frequency
+			for instruction, freq := range scd.InstructionFrequency {
+				value := d.instructionFrequency[instruction]
+				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+				d.instructionFrequency[instruction] = value
+			}
+
+			// update basic block frequency
+			for addr, bb := range scd.BasicBlockFrequency {
+				bkey := BasicBlockKey{Contract: scd.Contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
+				d.basicBlockFrequency[bkey] += bb.Frequency
+			}
+
+			// step length frequency
+			value := d.stepLengthFrequency[scd.StepLength]
+			value.Add(&value, new(big.Int).SetUint64(uint64(1)))
+			d.stepLengthFrequency[scd.StepLength] = value
+
+		} else {
+			break
+		}
+	}
+	// release data set
+	d.mx.Unlock()
+}
 
 // update statistics
 func (d *VmMicroData) UpdateStatistics(scd *SmartContractData) {
 
-	// don't process; just put into the queue
+	// don't process record now; just put into the queue
 	recordQueue.Enqueue(scd)
-	atomic.AddUint64(&ops, 1)
+	atomic.AddUint64(&QueueSize, 1)
 
 	// if threshold is reached; process all queued records
-	if atomic.LoadUint64(&ops) > 100000 {
-		// get access to dataset
-		d.mx.Lock()
-		if atomic.LoadUint64(&ops) > 100000 {
-			atomic.StoreUint64(&ops, 0)
-			for {
-				scd = recordQueue.Dequeue()
-				if scd != nil {
-					// update opcode frequency
-					for opCode, freq := range scd.OpCodeFrequency {
-						value := d.opCodeFrequency[opCode]
-						value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-						d.opCodeFrequency[opCode] = value
-					}
-
-					// update instruction opCodeDuration
-					for opCode, duration := range scd.OpCodeDuration {
-						value := d.opCodeDuration[opCode]
-						value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
-						d.opCodeDuration[opCode] = value
-					}
-
-					// update instruction frequency
-					for instruction, freq := range scd.InstructionFrequency {
-						value := d.instructionFrequency[instruction]
-						value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-						d.instructionFrequency[instruction] = value
-					}
-
-					// update basic block frequency
-					for addr, bb := range scd.BasicBlockFrequency {
-						bkey := BasicBlockKey{Contract: scd.Contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
-						d.basicBlockFrequency[bkey] += bb.Frequency
-					}
-
-					// step length frequency
-					value := d.stepLengthFrequency[scd.StepLength]
-					value.Add(&value, new(big.Int).SetUint64(uint64(1)))
-					d.stepLengthFrequency[scd.StepLength] = value
-
-				} else {
-					break
-				}
-			}
-		}
-		// release data set
-		d.mx.Unlock()
+	if atomic.LoadUint64(&QueueSize) > QueueMaxSize {
+		atomic.StoreUint64(&QueueSize, 0)
+		d.FlushProcessQueue()
 	}
 }
 
 // update statistics
 func PrintStatistics() {
+	// Flush queue
+	vmStats.FlushProcessQueue()
+
 	// get access to dataset
 	vmStats.mx.Lock()
 
