@@ -132,16 +132,16 @@ func PrintStatistics() {
 		fmt.Printf("steplen-freq: %v,%v\n", length, freq.String())
 	}
 
-	// Dump jump destination frequency statistics into a SQLITE3 database
+	// Dump basic-block frequency statistics into a SQLITE3 database
 
 	// open sqlite3 database
-	db, err := sql.Open("sqlite3", "./jumpdest.db") // Open the created SQLite File
+	db, err := sql.Open("sqlite3", "./basicblocks.db") // Open the created SQLite File
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	defer db.Close()
 
-	// drop jump-dest table
+	// drop basic-block frequency table
 	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
 	_, err = db.Exec(dropBasicBlockFrequency)
 	if err != nil {
