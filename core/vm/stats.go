@@ -18,6 +18,7 @@ package vm
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -28,18 +29,18 @@ import (
 )
 
 type BasicBlockKey struct {
-	Contract string
+	Contract     string
 	Instructions string
-	Address uint64
+	Address      uint64
 }
 
 // VM Micro Dataset for profiling
 type VmMicroData struct {
-	opCodeFrequency      map[OpCode]big.Int                   // opcode frequency statistics
-	opCodeDuration       map[OpCode]big.Int                   // accumulated duration of opcodes
-	instructionFrequency map[uint64]big.Int                   // instruction frequency statistics
-	stepLengthFrequency  map[int]big.Int                      // smart contract length frequency
-	basicBlockFrequency  map[BasicBlockKey]uint64             // basic block statistics
+	opCodeFrequency      map[OpCode]big.Int       // opcode frequency statistics
+	opCodeDuration       map[OpCode]big.Int       // accumulated duration of opcodes
+	instructionFrequency map[uint64]big.Int       // instruction frequency statistics
+	stepLengthFrequency  map[int]big.Int          // smart contract length frequency
+	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
 	isInitialized        bool
 	mx                   sync.Mutex // mutex to protect micro dataset
 }
@@ -86,12 +87,9 @@ func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency
 		d.instructionFrequency[instruction] = value
 	}
 
-	// update jump destination frequency
+	// update basic block frequency
 	for addr, bb := range basicBlockFrequency {
-		bkey := BasicBlockKey {}
-		bkey.Contract = contract.String()
-		bkey.Address = addr
-		bkey.Instructions = string(bb.Instructions)
+		bkey := BasicBlockKey{Contract: contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
 		d.basicBlockFrequency[bkey] += bb.Frequency
 	}
 
@@ -145,11 +143,7 @@ func PrintStatistics() {
 
 	// drop jump-dest table
 	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
-	statement, err := db.Prepare(dropBasicBlockFrequency)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	_, err = statement.Exec()
+	_, err = db.Exec(dropBasicBlockFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
@@ -159,29 +153,61 @@ func PrintStatistics() {
 	CREATE TABLE BasicBlockFrequency (
 	 contract TEXT,
 	 address NUMERIC,
-	 instructions BLOB,
+	 instructions TEXT,
 	 frequency NUMERIC
 	);`
-	statement, err = db.Prepare(createBasicBlockFrequency)
+	_, err = db.Exec(createBasicBlockFrequency)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalln(err.Error())
 	}
-	_, err = statement.Exec()
+
+	// switch synchronous mode off
+	_, err = db.Exec("PRAGMA synchronous = OFF;PRAGMA journal_mode = MEMORY;")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// begin Transaction
+	const beginTransaction string = `BEGIN TRANSACTION;`
+	const endTransaction string = `END TRANSACTION;`
+	_, err = db.Exec(beginTransaction)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 
 	// populate values
 	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, instructions, frequency) VALUES (?, ?, ?, ?)`
-	statement, err = db.Prepare(insertFrequency)
+	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
+	ctr := 1
 	for bkey, freq := range vmStats.basicBlockFrequency {
-		_, err = statement.Exec(bkey.Contract, bkey.Address, []byte(bkey.Instructions), freq)
+		// commit dataset after 10000 entries
+		if ctr >= 100000 {
+			ctr = 1
+			_, err = db.Exec(endTransaction)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+			_, err = db.Exec(beginTransaction)
+			if err != nil {
+				log.Fatalln(err.Error())
+			}
+		} else {
+			ctr++
+		}
+		_, err = statement.Exec(bkey.Contract, bkey.Address, bkey.Instructions, freq)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
+
+	}
+
+	// end transaction
+	_, err = db.Exec(endTransaction)
+	if err != nil {
+		log.Fatalln(err.Error())
 	}
 
 	// release data set

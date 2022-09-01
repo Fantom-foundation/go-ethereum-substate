@@ -52,7 +52,7 @@ type ScopeContext struct {
 // BasicBlock contains the address of a basic block, the instructions, and the
 // execution frequency of a basic block.
 type BasicBlock struct {
-	Instructions []OpCode
+	Instructions []byte
 	Frequency    uint64
 }
 
@@ -169,7 +169,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		opCodeFrequency     = map[OpCode]uint64{}        // op-code frequency stats
 		opCodeDuration      = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
 		pcCounterFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
-		basicBlockFrequency = map[uint64]BasicBlock{}     // basic block map that translates an address to a basic block
+		basicBlockFrequency = map[uint64]BasicBlock{}    // basic block map that translates an address to a basic block
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
@@ -305,7 +305,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				// basic block not found in frequency map
 				// => create new one
 				idx := pc
-				instructions := []OpCode{}
+				instructions := []byte{}
 				length := uint64(len(contract.Code))
 				for {
 
@@ -316,7 +316,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 					// fetch op-code
 					op := contract.GetOp(idx)
-					instructions = append(instructions, op)
+					instructions = append(instructions, byte(op))
 
 					// end of basic block?
 					if op == JUMP ||
@@ -356,14 +356,15 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 							idx += 7
 						}
 
-						// skip to next instruction
-						idx++
 					}
+
+					// skip to next instruction
+					idx++
 				}
 				basicBlockFrequency[pc] = BasicBlock{Instructions: instructions, Frequency: 1}
 			} else {
-				bb := basicBlockFrequency[pc] 
-				bb.Frequency ++
+				bb := basicBlockFrequency[pc]
+				bb.Frequency++
 				basicBlockFrequency[pc] = bb
 			}
 		}
