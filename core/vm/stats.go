@@ -25,13 +25,26 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
+// Key for a basic-block for frequency measurement
 type BasicBlockKey struct {
-	Contract     string
-	Instructions string
-	Address      uint64
+	Contract     string // contract in hex format
+	Instructions string // instructions in hex format
+	Address      uint64 // basic-block start address
+}
+
+// Data record for a single smart contract invocation
+type SmartContractData struct {
+	Contract             common.Address           // smart contract address
+	OpCodeFrequency      map[OpCode]uint64        // opcode frequency stats
+	OpCodeDuration       map[OpCode]time.Duration // opcode durations stats
+	InstructionFrequency map[uint64]uint64        // instruction frequency stats
+	BasicBlockFrequency  map[uint64]BasicBlock    // basic block frequency
+	StepLength           int                      // number of executed instructions
 }
 
 // VM Micro Dataset for profiling
@@ -48,6 +61,83 @@ type VmMicroData struct {
 // single global data set for all workers
 var vmStats VmMicroData
 
+// queue adapted from here: https://www.sobyte.net/post/2021-07/implementing-lock-free-queues-with-go/
+
+// unbounded lock-free
+type RecordQueue struct {
+	head unsafe.Pointer
+	tail unsafe.Pointer
+}
+
+// Node
+type RecordNode struct {
+	value *SmartContractData
+	next  unsafe.Pointer
+}
+
+// NewRecordQueue returns an empty queue.
+func NewRecordQueue() *RecordQueue {
+	n := unsafe.Pointer(&RecordNode{})
+	return &RecordQueue{head: n, tail: n}
+}
+
+// Enqueue puts the given value v at the tail of the queue.
+func (q *RecordQueue) Enqueue(v *SmartContractData) {
+	n := &RecordNode{value: v}
+	for {
+		tail := load(&q.tail)
+		next := load(&tail.next)
+		if tail == load(&q.tail) { // are tail and next consistent?
+			if next == nil {
+				if cas(&tail.next, next, n) {
+					cas(&q.tail, tail, n) // Enqueue is done.  try to swing tail to the inserted node
+					return
+				}
+			} else { // tail was not pointing to the last node
+				// try to swing Tail to the next node
+				cas(&q.tail, tail, next)
+			}
+		}
+	}
+}
+
+// Dequeue removes and returns the value at the head of the queue.
+// It returns nil if the queue is empty.
+func (q *RecordQueue) Dequeue() *SmartContractData {
+	for {
+		head := load(&q.head)
+		tail := load(&q.tail)
+		next := load(&head.next)
+		if head == load(&q.head) { // are head, tail, and next consistent?
+			if head == tail { // is queue empty or tail falling behind?
+				if next == nil { // is queue empty?
+					return nil
+				}
+				// tail is falling behind.  try to advance it
+				cas(&q.tail, tail, next)
+			} else {
+				// read value before CAS otherwise another dequeue might free the next node
+				v := next.value
+				if cas(&q.head, head, next) {
+					return v // Dequeue is done.  return
+				}
+			}
+		}
+	}
+}
+
+func load(p *unsafe.Pointer) (n *RecordNode) {
+	return (*RecordNode)(atomic.LoadPointer(p))
+}
+
+func cas(p *unsafe.Pointer, old, new *RecordNode) (ok bool) {
+	return atomic.CompareAndSwapPointer(
+		p, unsafe.Pointer(old), unsafe.Pointer(new))
+}
+
+// queue
+var recordQueue *RecordQueue = NewRecordQueue()
+
 func (d *VmMicroData) Initialize() {
 	d.mx.Lock()
 	if !d.isInitialized {
@@ -61,44 +151,64 @@ func (d *VmMicroData) Initialize() {
 	d.mx.Unlock()
 }
 
+var ops uint64 = 0
+
 // update statistics
-func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, basicBlockFrequency map[uint64]BasicBlock, stepLength int) {
-	// get access to dataset
-	d.mx.Lock()
+func (d *VmMicroData) UpdateStatistics(scd *SmartContractData) {
 
-	// update opcode frequency
-	for opCode, freq := range opCodeFrequency {
-		value := d.opCodeFrequency[opCode]
-		value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-		d.opCodeFrequency[opCode] = value
+	// don't process; just put into the queue
+	recordQueue.Enqueue(scd)
+	atomic.AddUint64(&ops, 1)
+
+	// if threshold is reached; process all queued records
+	if atomic.LoadUint64(&ops) > 100000 {
+		// get access to dataset
+		d.mx.Lock()
+		if atomic.LoadUint64(&ops) > 100000 {
+			atomic.StoreUint64(&ops, 0)
+			for {
+				scd = recordQueue.Dequeue()
+				if scd != nil {
+					// update opcode frequency
+					for opCode, freq := range scd.OpCodeFrequency {
+						value := d.opCodeFrequency[opCode]
+						value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+						d.opCodeFrequency[opCode] = value
+					}
+
+					// update instruction opCodeDuration
+					for opCode, duration := range scd.OpCodeDuration {
+						value := d.opCodeDuration[opCode]
+						value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
+						d.opCodeDuration[opCode] = value
+					}
+
+					// update instruction frequency
+					for instruction, freq := range scd.InstructionFrequency {
+						value := d.instructionFrequency[instruction]
+						value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+						d.instructionFrequency[instruction] = value
+					}
+
+					// update basic block frequency
+					for addr, bb := range scd.BasicBlockFrequency {
+						bkey := BasicBlockKey{Contract: scd.Contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
+						d.basicBlockFrequency[bkey] += bb.Frequency
+					}
+
+					// step length frequency
+					value := d.stepLengthFrequency[scd.StepLength]
+					value.Add(&value, new(big.Int).SetUint64(uint64(1)))
+					d.stepLengthFrequency[scd.StepLength] = value
+
+				} else {
+					break
+				}
+			}
+		}
+		// release data set
+		d.mx.Unlock()
 	}
-
-	// update instruction opCodeDuration
-	for opCode, duration := range opCodeDuration {
-		value := d.opCodeDuration[opCode]
-		value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
-		d.opCodeDuration[opCode] = value
-	}
-
-	// update instruction frequency
-	for instruction, freq := range instructionFrequency {
-		value := d.instructionFrequency[instruction]
-		value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-		d.instructionFrequency[instruction] = value
-	}
-
-	// update basic block frequency
-	for addr, bb := range basicBlockFrequency {
-		bkey := BasicBlockKey{Contract: contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
-		d.basicBlockFrequency[bkey] += bb.Frequency
-	}
-
-	// step length frequency
-	value := d.stepLengthFrequency[stepLength]
-	value.Add(&value, new(big.Int).SetUint64(uint64(1)))
-	d.stepLengthFrequency[stepLength] = value
-	// release data set
-	d.mx.Unlock()
 }
 
 // update statistics

@@ -209,7 +209,13 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 
 			// add observations
-			vmStats.UpdateStatistics(contract.CodeAddr, opCodeFrequency, opCodeDuration, instructionFrequency, basicBlockFrequency, steps)
+			scd := SmartContractData{Contract: *contract.CodeAddr, 
+		                              OpCodeFrequency: opCodeFrequency,
+				              OpCodeDuration: opCodeDuration,
+				              InstructionFrequency: instructionFrequency,
+				              BasicBlockFrequency: basicBlockFrequency,
+				              StepLength: steps}
+			vmStats.UpdateStatistics(&scd)
 		}()
 	}
 
