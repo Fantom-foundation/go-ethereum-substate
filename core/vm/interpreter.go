@@ -49,11 +49,10 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
-// BasicBlock contains the address of a basic block, the instructions, and the
-// execution frequency of a basic block.
+// BasicBlock contains the instructions and the execution frequency.
 type BasicBlock struct {
-	Instructions []byte
-	Frequency    uint64
+	Instructions []byte // instructions without parameters for PUSHx
+	Frequency    uint64 // dynamic execution frequency
 }
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
