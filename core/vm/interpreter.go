@@ -200,22 +200,21 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	if ProfileEVMOpCode {
 		defer func() {
 			// compute frequency statistics for instructions
-			if !vmStats.isInitialized {
-				vmStats.Initialize()
-			}
 			instructionFrequency := map[uint64]uint64{}
 			for _, ctr := range pcCounterFrequency {
 				instructionFrequency[ctr]++
 			}
 
-			// add observations
-			scd := SmartContractData{Contract: *contract.CodeAddr, 
-		                              OpCodeFrequency: opCodeFrequency,
-				              OpCodeDuration: opCodeDuration,
-				              InstructionFrequency: instructionFrequency,
-				              BasicBlockFrequency: basicBlockFrequency,
-				              StepLength: steps}
-			vmStats.UpdateStatistics(&scd)
+			// construct statistical observation
+			scd := SmartContractData{Contract: *contract.CodeAddr,
+				OpCodeFrequency:      opCodeFrequency,
+				OpCodeDuration:       opCodeDuration,
+				InstructionFrequency: instructionFrequency,
+				BasicBlockFrequency:  basicBlockFrequency,
+				StepLength:           steps}
+
+			// process statistical observation
+			ProcessSmartContractData(&scd)
 		}()
 	}
 
