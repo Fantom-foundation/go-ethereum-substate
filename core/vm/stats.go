@@ -63,8 +63,8 @@ var vmStats VmMicroData = VmMicroData{
 	basicBlockFrequency:  make(map[BasicBlockKey]uint64),
 }
 
-// Maximal number of records per SQLITE3 transaction for dumping basic block
-// statistics
+// Maximal number of records per SQLITE3 transaction 
+// for dumping basic block statistics
 const BasicBlockMaxNumRecords = 1000
 
 // Record Queue to store smart-contract data records from each worker
@@ -129,7 +129,7 @@ func DataCollector(ctx context.Context, done chan struct{}) {
 			FlushQueue()
 
 			// send worker to sleep (avoiding busy waiting)
-			time.Sleep(100 * time.Millisecond)
+			// time.Sleep(1 * time.Millisecond)
 		}
 	}
 }
