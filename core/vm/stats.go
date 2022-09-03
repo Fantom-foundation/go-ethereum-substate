@@ -63,19 +63,22 @@ var vmStats VmMicroData = VmMicroData{
 	basicBlockFrequency:  make(map[BasicBlockKey]uint64),
 }
 
-// Maximal number of records per SQLITE3 transaction 
+// Maximal number of records per SQLITE3 transaction
 // for dumping basic block statistics
 const BasicBlockMaxNumRecords = 1000
 
-// Record Queue to store smart-contract data records from each worker
-// This is a lock-free queue; hence sufficiently fast
-var recordQueue *RecordQueue = NewRecordQueue()
+// channel for communication
+var ch chan *SmartContractData = make(chan *SmartContractData, 100000)
 
-// Flush the record queue
-func FlushQueue() {
+// The data collector checks for a stopping signal and flushes
+// the record queue of the workers. It is a background task
+func DataCollector(ctx context.Context, done chan struct{}) {
+	defer close(done)
+
 	for {
-		// pop all records and process them
-		if scd := recordQueue.Dequeue(); scd != nil {
+		select {
+		// receive new data record?
+		case scd := <-ch:
 			// update opcode frequency
 			for opCode, freq := range scd.OpCodeFrequency {
 				value := vmStats.opCodeFrequency[opCode]
@@ -107,37 +110,19 @@ func FlushQueue() {
 			value := vmStats.stepLengthFrequency[scd.StepLength]
 			value.Add(&value, new(big.Int).SetUint64(uint64(1)))
 			vmStats.stepLengthFrequency[scd.StepLength] = value
-		} else {
-			break
-		}
-	}
-}
 
-// The data collector checks for a stopping signal and flushes
-// the record queue of the workers. It is a background task
-func DataCollector(ctx context.Context, done chan struct{}) {
-	defer close(done)
-
-	// check for stop signals and process queue
-	for {
-		// received stop signal?
-		select {
+		// receive stop signal?
 		case <-ctx.Done():
-			return
-		default:
-			// flush queue
-			FlushQueue()
-
-			// send worker to sleep (avoiding busy waiting)
-			// time.Sleep(1 * time.Millisecond)
+			if len(ch) == 0 {
+				return
+			}
 		}
 	}
 }
 
 // put record into queue for later processing by collector worker
 func ProcessSmartContractData(scd *SmartContractData) {
-	// don't process now; put it into queue
-	recordQueue.Enqueue(scd)
+	ch <- scd
 }
 
 // dump basic block frequency stats into a SQLITE3 database
@@ -214,9 +199,6 @@ func DumpBasicBlockFrequency() {
 
 // update statistics
 func PrintStatistics() {
-	// flush queue; ensure that we don't lose records
-	FlushQueue()
-
 	// print opcode frequency
 	for opCode, freq := range vmStats.opCodeFrequency {
 		fmt.Printf("opcode-freq: %v,%v\n", opCode, freq.String())
