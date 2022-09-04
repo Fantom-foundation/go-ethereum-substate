@@ -57,7 +57,6 @@ type VmMicroData struct {
 	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
 }
 
-
 // Create new micro-profiling statistic
 func NewVmMicroData() *VmMicroData {
 	p := new(VmMicroData)
@@ -68,7 +67,6 @@ func NewVmMicroData() *VmMicroData {
 	p.basicBlockFrequency = make(map[BasicBlockKey]uint64)
 	return p
 }
-
 
 // Channel for communication
 var ch chan *SmartContractData = make(chan *SmartContractData, 100000)
@@ -130,7 +128,7 @@ func ProcessSmartContractData(scd *SmartContractData) {
 	ch <- scd
 }
 
-// Merge two micro-profiling statistics 
+// Merge two micro-profiling statistics
 func (vmStats *VmMicroData) Merge(src *VmMicroData) {
 	// update opcode frequency
 	for opCode, freq := range src.opCodeFrequency {
@@ -151,9 +149,9 @@ func (vmStats *VmMicroData) Merge(src *VmMicroData) {
 		value := vmStats.instructionFrequency[instruction]
 		value.Add(&value, &freq)
 		vmStats.instructionFrequency[instruction] = value
-	}	
+	}
 
-	// step length frequency 
+	// step length frequency
 	for length, freq := range src.stepLengthFrequency {
 		value := vmStats.stepLengthFrequency[length]
 		value.Add(&value, &freq)

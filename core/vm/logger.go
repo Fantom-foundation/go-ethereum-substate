@@ -60,7 +60,6 @@ type LogConfig struct {
 var ProfileEVMCall bool
 var ProfileEVMOpCode bool
 
-
 //go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
