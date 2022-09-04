@@ -28,6 +28,9 @@ import (
 	"time"
 )
 
+// Maximal number of records per SQLITE3 transaction for dumping basic block statistics
+const BasicBlockMaxNumRecords = 1000
+
 // Key for a basic-block for frequency measurement
 type BasicBlockKey struct {
 	Contract     string // contract in hex format
@@ -45,7 +48,7 @@ type SmartContractData struct {
 	StepLength           int                      // number of executed instructions
 }
 
-// VM Micro Dataset for profiling
+// Micro-profiling statistic for the VM
 type VmMicroData struct {
 	opCodeFrequency      map[OpCode]big.Int       // opcode frequency statistics
 	opCodeDuration       map[OpCode]big.Int       // accumulated duration of opcodes
@@ -54,31 +57,33 @@ type VmMicroData struct {
 	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
 }
 
-// single global data set for whole blockchain
-var vmStats VmMicroData = VmMicroData{
-	opCodeFrequency:      make(map[OpCode]big.Int),
-	opCodeDuration:       make(map[OpCode]big.Int),
-	instructionFrequency: make(map[uint64]big.Int),
-	stepLengthFrequency:  make(map[int]big.Int),
-	basicBlockFrequency:  make(map[BasicBlockKey]uint64),
+
+// Create new micro-profiling statistic
+func NewVmMicroData() *VmMicroData {
+	p := new(VmMicroData)
+	p.opCodeFrequency = make(map[OpCode]big.Int)
+	p.opCodeDuration = make(map[OpCode]big.Int)
+	p.instructionFrequency = make(map[uint64]big.Int)
+	p.stepLengthFrequency = make(map[int]big.Int)
+	p.basicBlockFrequency = make(map[BasicBlockKey]uint64)
+	return p
 }
 
-// Maximal number of records per SQLITE3 transaction
-// for dumping basic block statistics
-const BasicBlockMaxNumRecords = 1000
 
-// channel for communication
+// Channel for communication
 var ch chan *SmartContractData = make(chan *SmartContractData, 100000)
 
-// The data collector checks for a stopping signal and flushes
-// the record queue of the workers. It is a background task
-func DataCollector(ctx context.Context, done chan struct{}) {
+// The data collector checks for a stopping signal and processes
+// the workers' records via a channel. A data collector is a background task.
+func DataCollector(idx int, ctx context.Context, done chan struct{}, vmStats *VmMicroData) {
 	defer close(done)
-
 	for {
 		select {
-		// receive new data record?
+
+		// receive a new data record from a worker?
 		case scd := <-ch:
+			// process the data record and update the statistic
+
 			// update opcode frequency
 			for opCode, freq := range scd.OpCodeFrequency {
 				value := vmStats.opCodeFrequency[opCode]
@@ -120,13 +125,49 @@ func DataCollector(ctx context.Context, done chan struct{}) {
 	}
 }
 
-// put record into queue for later processing by collector worker
+// Put record into queue for later processing by collector worker
 func ProcessSmartContractData(scd *SmartContractData) {
 	ch <- scd
 }
 
+// Merge two micro-profiling statistics 
+func (vmStats *VmMicroData) Merge(src *VmMicroData) {
+	// update opcode frequency
+	for opCode, freq := range src.opCodeFrequency {
+		value := vmStats.opCodeFrequency[opCode]
+		value.Add(&value, &freq)
+		vmStats.opCodeFrequency[opCode] = value
+	}
+
+	// update instruction opCodeDuration
+	for opCode, duration := range src.opCodeDuration {
+		value := vmStats.opCodeDuration[opCode]
+		value.Add(&value, &duration)
+		vmStats.opCodeDuration[opCode] = value
+	}
+
+	// update instruction frequency
+	for instruction, freq := range src.instructionFrequency {
+		value := vmStats.instructionFrequency[instruction]
+		value.Add(&value, &freq)
+		vmStats.instructionFrequency[instruction] = value
+	}	
+
+	// step length frequency 
+	for length, freq := range src.stepLengthFrequency {
+		value := vmStats.stepLengthFrequency[length]
+		value.Add(&value, &freq)
+		vmStats.stepLengthFrequency[length] = value
+	}
+
+	// update basic block frequency
+	for bkey, freq := range src.basicBlockFrequency {
+		vmStats.basicBlockFrequency[bkey] += freq
+	}
+}
+
 // dump basic block frequency stats into a SQLITE3 database
-func DumpBasicBlockFrequency() {
+func (vmStats *VmMicroData) DumpBasicBlockFrequency() {
 	// Dump basic-block frequency statistics into a SQLITE3 database
 
 	// open sqlite3 database
@@ -198,7 +239,7 @@ func DumpBasicBlockFrequency() {
 }
 
 // update statistics
-func PrintStatistics() {
+func (vmStats VmMicroData) PrintStatistics() {
 	// print opcode frequency
 	for opCode, freq := range vmStats.opCodeFrequency {
 		fmt.Printf("opcode-freq: %v,%v\n", opCode, freq.String())
@@ -226,5 +267,5 @@ func PrintStatistics() {
 	}
 
 	// Dump basic block frequency stats into a SQLITE database
-	DumpBasicBlockFrequency()
+	vmStats.DumpBasicBlockFrequency()
 }
