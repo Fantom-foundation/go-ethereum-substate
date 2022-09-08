@@ -404,16 +404,12 @@ func NewSubstateIterator(start_block uint64, num_workers int) SubstateIterator {
 	go func() {
 		defer close(result)
 		step := 0
-		for {
-			select {
-			case next := <-results[step%num_workers]:
-				if next != nil {
-					result <- next
-				} else {
-					return
-				}
-			case <-done:
-				return
+		for open_producers := num_workers; open_producers > 0; {
+			next := <-results[step%num_workers]
+			if next != nil {
+				result <- next
+			} else {
+				open_producers--
 			}
 			step++
 		}
@@ -429,6 +425,11 @@ func NewSubstateIterator(start_block uint64, num_workers int) SubstateIterator {
 
 func (i *SubstateIterator) Release() {
 	close(i.done)
+
+	// drain pipeline until the result channel is closed
+	for open := true; open; _, open = <-i.source {
+	}
+
 	i.iter.Release()
 }
 

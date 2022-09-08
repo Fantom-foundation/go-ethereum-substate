@@ -16,7 +16,7 @@ var (
 	}
 	substateDir      = SubstateDirFlag.Value
 	staticSubstateDB *SubstateDB
-	RecordReplay bool = false
+	RecordReplay     bool = false
 )
 
 func OpenSubstateDB() {
@@ -69,6 +69,10 @@ func CloseFakeSubstateDB() {
 func SetSubstateFlags(ctx *cli.Context) {
 	substateDir = ctx.String(SubstateDirFlag.Name)
 	fmt.Printf("record-replay: --substatedir=%s\n", substateDir)
+}
+
+func SetSubstateDirectory(dir string) {
+	substateDir = dir
 }
 
 func HasCode(codeHash common.Hash) bool {
