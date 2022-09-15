@@ -28,6 +28,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var (
+	executionTimeLimit = 5 * time.Second
+)
+
+// SetExecutionTimeLimit sets execution limit for RPC method calls
+func SetExecutionTimeLimit(limit time.Duration) {
+	executionTimeLimit = limit
+}
+
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
 // because RPCs are processed on background goroutines launched by handler.
@@ -509,7 +518,11 @@ func (h *handler) handleCall(cp *callProc, msg *jsonrpcMessage) *jsonrpcMessage 
 		return msg.errorResponse(&invalidParamsError{err.Error()})
 	}
 	start := time.Now()
-	answer := h.runMethod(cp.ctx, msg, callb, args)
+
+	ctx, cancel := context.WithTimeout(cp.ctx, executionTimeLimit)
+	defer cancel()
+
+	answer := h.runMethod(ctx, msg, callb, args)
 
 	// Collect the statistics for RPC calls if metrics is enabled.
 	// We only care about pure rpc call. Filter out subscription.
