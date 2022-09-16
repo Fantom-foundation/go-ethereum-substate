@@ -17,99 +17,171 @@
 package vm
 
 import (
+	"context"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"math/big"
-	"sync"
 	"time"
 )
 
-type BasicBlockKey struct {
-	Contract     string
-	Instructions string
-	Address      uint64
+// Micro-Profiling data record for a single smart contract invocation
+type SmartContractData struct {
+	OpCodeFrequency      map[OpCode]uint64        // opcode frequency stats
+	OpCodeDuration       map[OpCode]time.Duration // opcode durations stats
+	InstructionFrequency map[uint64]uint64        // instruction frequency stats
+	StepLength           int                      // number of executed instructions
 }
 
-// VM Micro Dataset for profiling
+// Micro-profiling statistic for the VM
 type VmMicroData struct {
 	opCodeFrequency      map[OpCode]big.Int       // opcode frequency statistics
 	opCodeDuration       map[OpCode]big.Int       // accumulated duration of opcodes
 	instructionFrequency map[uint64]big.Int       // instruction frequency statistics
 	stepLengthFrequency  map[int]big.Int          // smart contract length frequency
-	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
-	isInitialized        bool
-	mx                   sync.Mutex // mutex to protect micro dataset
 }
 
-// single global data set for all workers
-var vmStats VmMicroData
+// Create new micro-profiling statistic
+func NewVmMicroData() *VmMicroData {
+	p := new(VmMicroData)
+	p.opCodeFrequency = make(map[OpCode]big.Int)
+	p.opCodeDuration = make(map[OpCode]big.Int)
+	p.instructionFrequency = make(map[uint64]big.Int)
+	p.stepLengthFrequency = make(map[int]big.Int)
+	return p
+}
 
-func (d *VmMicroData) Initialize() {
-	d.mx.Lock()
-	if !d.isInitialized {
-		d.opCodeFrequency = make(map[OpCode]big.Int)
-		d.opCodeDuration = make(map[OpCode]big.Int)
-		d.instructionFrequency = make(map[uint64]big.Int)
-		d.stepLengthFrequency = make(map[int]big.Int)
-		d.basicBlockFrequency = make(map[BasicBlockKey]uint64)
-		d.isInitialized = true
+// Channel for communication
+// TODO: Buffer size as cli argument
+const chSize = 100000
+var ch chan *SmartContractData = make(chan *SmartContractData, chSize)
+
+// The data collector checks for a stopping signal and processes
+// the workers' records via a channel. A data collector is a background task.
+func DataCollector(idx int, ctx context.Context, done chan struct{}, vmStats *VmMicroData) {
+	defer close(done)
+	for {
+		select {
+
+		// receive a new data record from a worker?
+		case scd := <-ch:
+			// process the data record and update the statistic
+
+			// update opcode frequency
+			for opCode, freq := range scd.OpCodeFrequency {
+				value := vmStats.opCodeFrequency[opCode]
+				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+				vmStats.opCodeFrequency[opCode] = value
+			}
+
+			// update instruction opCodeDuration
+			for opCode, duration := range scd.OpCodeDuration {
+				value := vmStats.opCodeDuration[opCode]
+				value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
+				vmStats.opCodeDuration[opCode] = value
+			}
+
+			// update instruction frequency
+			for instruction, freq := range scd.InstructionFrequency {
+				value := vmStats.instructionFrequency[instruction]
+				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
+				vmStats.instructionFrequency[instruction] = value
+			}
+
+			// step length frequency
+			value := vmStats.stepLengthFrequency[scd.StepLength]
+			value.Add(&value, new(big.Int).SetUint64(uint64(1)))
+			vmStats.stepLengthFrequency[scd.StepLength] = value
+
+		// receive stop signal?
+		case <-ctx.Done():
+			if len(ch) == 0 {
+				return
+			}
+		}
 	}
-	d.mx.Unlock()
 }
 
-// update statistics
-func (d *VmMicroData) UpdateStatistics(contract *common.Address, opCodeFrequency map[OpCode]uint64, opCodeDuration map[OpCode]time.Duration, instructionFrequency map[uint64]uint64, basicBlockFrequency map[uint64]BasicBlock, stepLength int) {
-	// get access to dataset
-	d.mx.Lock()
+// Put record into queue for later processing by collector worker
+func ProcessSmartContractData(scd *SmartContractData) {
+	ch <- scd
+}
 
+// Merge two micro-profiling statistics
+func (vmStats *VmMicroData) merge(src *VmMicroData) {
 	// update opcode frequency
-	for opCode, freq := range opCodeFrequency {
-		value := d.opCodeFrequency[opCode]
-		value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-		d.opCodeFrequency[opCode] = value
+	for opCode, freq := range src.opCodeFrequency {
+		value := vmStats.opCodeFrequency[opCode]
+		value.Add(&value, &freq)
+		vmStats.opCodeFrequency[opCode] = value
 	}
 
 	// update instruction opCodeDuration
-	for opCode, duration := range opCodeDuration {
-		value := d.opCodeDuration[opCode]
-		value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
-		d.opCodeDuration[opCode] = value
+	for opCode, duration := range src.opCodeDuration {
+		value := vmStats.opCodeDuration[opCode]
+		value.Add(&value, &duration)
+		vmStats.opCodeDuration[opCode] = value
 	}
 
 	// update instruction frequency
-	for instruction, freq := range instructionFrequency {
-		value := d.instructionFrequency[instruction]
-		value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-		d.instructionFrequency[instruction] = value
-	}
-
-	// update basic block frequency
-	for addr, bb := range basicBlockFrequency {
-		bkey := BasicBlockKey{Contract: contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
-		d.basicBlockFrequency[bkey] += bb.Frequency
+	for instruction, freq := range src.instructionFrequency {
+		value := vmStats.instructionFrequency[instruction]
+		value.Add(&value, &freq)
+		vmStats.instructionFrequency[instruction] = value
 	}
 
 	// step length frequency
-	value := d.stepLengthFrequency[stepLength]
-	value.Add(&value, new(big.Int).SetUint64(uint64(1)))
-	d.stepLengthFrequency[stepLength] = value
-	// release data set
-	d.mx.Unlock()
+	for length, freq := range src.stepLengthFrequency {
+		value := vmStats.stepLengthFrequency[length]
+		value.Add(&value, &freq)
+		vmStats.stepLengthFrequency[length] = value
+	}
+
+}
+
+// dump opcode frequency stats into a SQLITE3 database
+func (vmStats *VmMicroData) dumpOpCodeFrequency(db *sql.DB) {
+	// drop old frequency table and create new one
+	_, err := db.Exec("DROP TABLE IF EXISTS OpCodeFrequency;CREATE TABLE opcode_frequency ( opcode TEXT NOT NULL, freq INTEGER NOT NULL, PRIMARY KEY (opcode));")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// prepare an insert statement for faster inserts and insert frequencies
+	statement, err := db.Prepare("INSERT INTO opcode_frequency(opcode, frequency) VALUES (?, ?)")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	for opCode, freq := range vmStats.opCodeFrequency {
+		_, err = statement.Exec(opCode, freq.String())
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+	}
 }
 
 // update statistics
-func PrintStatistics() {
-	// get access to dataset
-	vmStats.mx.Lock()
+func (vmStats *VmMicroData) dump() {
 
-	// print opcode frequency
-	for opCode, freq := range vmStats.opCodeFrequency {
-		fmt.Printf("opcode-freq: %v,%v\n", opCode, freq.String())
+	// open sqlite3 database
+	db, err := sql.Open("sqlite3", "./profiling.db") // Open the created SQLite File
+	if err != nil {
+		log.Fatal(err.Error())
 	}
+	defer db.Close()
+
+	// switch synchronous mode off, enable memory journaling,
+	_, err = db.Exec("PRAGMA synchronous = OFF;PRAGMA journal_mode = MEMORY;")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// TODO: write version number and log record
+
+	// Dump basic block frequency stats into a SQLITE database
+	vmStats.dumpOpCodeFrequency(db)
 
 	// print total opcode duration in seconds
 	for opCode, duration := range vmStats.opCodeDuration {
@@ -131,85 +203,4 @@ func PrintStatistics() {
 	for length, freq := range vmStats.stepLengthFrequency {
 		fmt.Printf("steplen-freq: %v,%v\n", length, freq.String())
 	}
-
-	// Dump basic-block frequency statistics into a SQLITE3 database
-
-	// open sqlite3 database
-	db, err := sql.Open("sqlite3", "./basicblocks.db") // Open the created SQLite File
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer db.Close()
-
-	// drop basic-block frequency table
-	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
-	_, err = db.Exec(dropBasicBlockFrequency)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-
-	// create new table
-	const createBasicBlockFrequency string = `
-	CREATE TABLE BasicBlockFrequency (
-	 contract TEXT,
-	 address NUMERIC,
-	 instructions TEXT,
-	 frequency NUMERIC
-	);`
-	_, err = db.Exec(createBasicBlockFrequency)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-
-	// switch synchronous mode off
-	_, err = db.Exec("PRAGMA synchronous = OFF;PRAGMA journal_mode = MEMORY;")
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-
-	// begin Transaction
-	const beginTransaction string = `BEGIN TRANSACTION;`
-	const endTransaction string = `END TRANSACTION;`
-	_, err = db.Exec(beginTransaction)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-
-	// populate values
-	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, instructions, frequency) VALUES (?, ?, ?, ?)`
-	statement, err := db.Prepare(insertFrequency)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-	ctr := 1
-	for bkey, freq := range vmStats.basicBlockFrequency {
-		// commit dataset after 10000 entries
-		if ctr >= 100000 {
-			ctr = 1
-			_, err = db.Exec(endTransaction)
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
-			_, err = db.Exec(beginTransaction)
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
-		} else {
-			ctr++
-		}
-		_, err = statement.Exec(bkey.Contract, bkey.Address, bkey.Instructions, freq)
-		if err != nil {
-			log.Fatalln(err.Error())
-		}
-
-	}
-
-	// end transaction
-	_, err = db.Exec(endTransaction)
-	if err != nil {
-		log.Fatalln(err.Error())
-	}
-
-	// release data set
-	vmStats.mx.Unlock()
 }

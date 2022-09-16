@@ -53,12 +53,6 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
-// BasicBlock contains the instructions and the execution frequency.
-type BasicBlock struct {
-	Instructions []byte // instructions without parameters for PUSHx
-	Frequency    uint64 // dynamic execution frequency
-}
-
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
 // Read to get a variable amount of data from the hash state. Read is faster than Sum
 // because it doesn't copy the internal state, but also modifies the internal state.
@@ -217,7 +211,19 @@ func (s *InterpreterState) Stop() {
 	}
 }
 
+// Proxy run function
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	if ProfileEVMOpCode {
+		return in.runProfileOpCode(state,input,readOnly)
+	} else {
+		return in.runPlain(state,input,readOnly)
+	}
+}
+
+
+// run with profiling op-codes enabled
+func (in *GethEVMInterpreter) runProfileOpCode(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+
 	defer func() {
 		state.finished = true
 		if state.done != nil {
@@ -267,9 +273,9 @@ func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnl
 		opCodeFrequency     = map[OpCode]uint64{}        // op-code frequency stats
 		opCodeDuration      = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
 		pcCounterFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
-		basicBlockFrequency = map[uint64]BasicBlock{}    // basic block map that translates an address to a basic block
 
 	)
+
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
 	// they are returned to the pools
@@ -293,21 +299,23 @@ func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnl
 	steps := 0
 
 	// record the opcodes counts and length
-	if ProfileEVMOpCode {
-		defer func() {
+	defer func() {
 			// compute frequency statistics for instructions
-			if !vmStats.isInitialized {
-				vmStats.Initialize()
-			}
 			instructionFrequency := map[uint64]uint64{}
 			for _, ctr := range pcCounterFrequency {
 				instructionFrequency[ctr]++
 			}
 
-			// add observations
-			vmStats.UpdateStatistics(contract.CodeAddr, opCodeFrequency, opCodeDuration, instructionFrequency, basicBlockFrequency, steps)
-		}()
-	}
+			// construct statistical observation
+			scd := SmartContractData{ 
+				OpCodeFrequency:      opCodeFrequency,
+				OpCodeDuration:       opCodeDuration,
+				InstructionFrequency: instructionFrequency,
+				StepLength:           steps}
+
+			// process statistical observation
+			ProcessSmartContractData(&scd)
+	}()
 
 	for {
 		// Block until next step should be processed.
@@ -335,10 +343,8 @@ func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnl
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
-		if ProfileEVMOpCode {
-			opCodeFrequency[op]++
-			pcCounterFrequency[pc]++
-		}
+		opCodeFrequency[op]++
+		pcCounterFrequency[pc]++
 		operation := in.cfg.JumpTable[op]
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
@@ -408,139 +414,224 @@ func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnl
 			instructionTime time.Duration
 		)
 
-		if ProfileEVMOpCode && op == JUMPDEST {
-			if _, ok := basicBlockFrequency[pc]; !ok {
-				// basic block not found in frequency map
-				// => create new one
-				idx := pc
-				instructions := []byte{}
-				length := uint64(len(contract.Code))
-				for {
-
-					// exceed code size
-					if idx >= length {
-						break
-					}
-
-					// fetch op-code
-					op := contract.GetOp(idx)
-					instructions = append(instructions, byte(op))
-
-					// end of basic block?
-					if op == JUMP ||
-						op == JUMPI ||
-						op == STOP ||
-						op == RETURN ||
-						op == REVERT ||
-						op == SELFDESTRUCT {
-						break
-					}
-
-					// skip constant of a push operation
-					if op >= PUSH1 && op <= PUSH32 {
-						numbits := op - PUSH1 + 1
-						if numbits >= 8 {
-							for ; numbits >= 16; numbits -= 16 {
-								idx += 16
-							}
-							for ; numbits >= 8; numbits -= 8 {
-								idx += 8
-							}
-						}
-						switch numbits {
-						case 1:
-							idx += 1
-						case 2:
-							idx += 2
-						case 3:
-							idx += 3
-						case 4:
-							idx += 4
-						case 5:
-							idx += 5
-						case 6:
-							idx += 6
-						case 7:
-							idx += 7
-						}
-
-					}
-
-					// skip to next instruction
-					idx++
-				}
-				basicBlockFrequency[pc] = BasicBlock{Instructions: instructions, Frequency: 1}
-			} else {
-				bb := basicBlockFrequency[pc]
-				bb.Frequency++
-				basicBlockFrequency[pc] = bb
-			}
-		}
-
 		if op == CREATE {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedCreate(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else if op == CREATE2 {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedCreate2(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else if op == CALL {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedCall(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else if op == CALLCODE {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedCallCode(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else if op == DELEGATECALL {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedDelegateCall(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else if op == STATICCALL {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, instructionTime, err = opTimedStaticCall(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed - instructionTime
-			}
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed - instructionTime
 		} else {
-			if ProfileEVMOpCode {
-				start = time.Now()
-			}
+			start = time.Now()
 			res, err = operation.execute(&pc, in, callContext)
-			if ProfileEVMOpCode {
-				elapsed := time.Since(start)
-				opCodeDuration[op] += elapsed
+			elapsed := time.Since(start)
+			opCodeDuration[op] += elapsed
+		}
+
+		// if the operation clears the return data (e.g. it has returning data)
+		// set the last return to the result of the operation.
+		if operation.returns {
+			in.returnData = res
+		}
+
+		switch {
+		case err != nil:
+			return nil, err
+		case operation.reverts:
+			return res, ErrExecutionReverted
+		case operation.halts:
+			return res, nil
+		case !operation.jumps:
+			pc++
+		}
+	}
+	return nil, nil
+}
+
+func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
+	defer func() {
+		state.finished = true
+		if state.done != nil {
+			close(state.done)
+		}
+	}()
+	// Increment the call depth which is restricted to 1024
+	in.evm.Depth++
+	defer func() { in.evm.Depth-- }()
+
+	// Make sure the readOnly is only set if we aren't in readOnly yet.
+	// This also makes sure that the readOnly flag isn't removed for child calls.
+	if readOnly && !in.readOnly {
+		in.readOnly = true
+		defer func() { in.readOnly = false }()
+	}
+
+	// Reset the previous call's return data. It's unimportant to preserve the old buffer
+	// as every returning call will return new data anyway.
+	in.returnData = nil
+
+	// Don't bother with the execution if there's no code.
+	if len(state.Contract.Code) == 0 {
+		return nil, nil
+	}
+
+	var (
+		contract    = state.Contract // processed contract
+		op          OpCode           // current opcode
+		mem         = state.Memory   // bound memory
+		stack       = state.Stack    // local stack
+		callContext = &ScopeContext{
+			Memory:   mem,
+			Stack:    stack,
+			Contract: contract,
+		}
+		// For optimisation reason we're using uint64 as the program counter.
+		// It's theoretically possible to go above 2^64. The YP defines the PC
+		// to be uint256. Practically much less so feasible.
+		pc   = uint64(0) // program counter
+		cost uint64
+		// copies used by tracer
+		pcCopy              uint64                       // needed for the deferred Tracer
+		gasCopy             uint64                       // for Tracer to log gas remaining before execution
+		logged              bool                         // deferred Tracer should ignore already logged steps
+		res                 []byte                       // result of the opcode execution function
+
+	)
+	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
+	// so that it get's executed _after_: the capturestate needs the stacks before
+	// they are returned to the pools
+	contract.Input = input
+
+	if in.cfg.Debug {
+		defer func() {
+			if err != nil {
+				if !logged {
+					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, callContext, in.evm.Depth, err)
+				}
+			}
+		}()
+	}
+	// The Interpreter main run loop (contextual). This loop runs until either an
+	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
+	// the execution of one of the operations or until the done flag is set by the
+	// parent context.
+	steps := 0
+
+	for {
+		// Block until next step should be processed.
+		if state.next != nil {
+			state.pc = pc
+			// Signal completion of previous step.
+			if steps != 0 {
+				state.done <- 0
+			}
+			// Wait for processing of next step
+			_, open := <-state.next
+			if !open {
+				return
 			}
 		}
+		steps++
+		if steps%1000 == 0 && atomic.LoadInt32(&in.evm.abort) != 0 {
+			break
+		}
+		if in.cfg.Debug {
+			// Capture pre-execution values for tracing.
+			logged, pcCopy, gasCopy = false, pc, contract.Gas
+		}
+
+		// Get the operation from the jump table and validate the stack to ensure there are
+		// enough stack items available to perform the operation.
+		op = contract.GetOp(pc)
+		operation := in.cfg.JumpTable[op]
+		if operation == nil {
+			return nil, &ErrInvalidOpCode{opcode: op}
+		}
+		// Validate stack
+		if sLen := stack.len(); sLen < operation.minStack {
+			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
+		} else if sLen > operation.maxStack {
+			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
+		}
+		// If the operation is valid, enforce write restrictions
+		if in.readOnly && in.evm.chainRules.IsByzantium {
+			// If the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed. The 3rd stack item
+			// for a call operation is the value. Transferring value from one
+			// account to the others means the state is modified and should also
+			// return with an error.
+			if operation.writes || (op == CALL && stack.Back(2).Sign() != 0) {
+				return nil, ErrWriteProtection
+			}
+		}
+		// Static portion of gas
+		cost = operation.constantGas // For tracing
+		if !contract.UseGas(operation.constantGas) {
+			return nil, ErrOutOfGas
+		}
+
+		var memorySize uint64
+		// calculate the new memory size and expand the memory to fit
+		// the operation
+		// Memory check needs to be done prior to evaluating the dynamic gas portion,
+		// to detect calculation overflows
+		if operation.memorySize != nil {
+			memSize, overflow := operation.memorySize(stack)
+			if overflow {
+				return nil, ErrGasUintOverflow
+			}
+			// memory is expanded in words of 32 bytes. Gas
+			// is also calculated in words.
+			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				return nil, ErrGasUintOverflow
+			}
+		}
+		// Dynamic portion of gas
+		// consume the gas and return an error if not enough gas is available.
+		// cost is explicitly set so that the capture state defer method can get the proper cost
+		if operation.dynamicGas != nil {
+			var dynamicCost uint64
+			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			cost += dynamicCost // total cost, for debug tracing
+			if err != nil || !contract.UseGas(dynamicCost) {
+				return nil, ErrOutOfGas
+			}
+		}
+		if memorySize > 0 {
+			mem.Resize(memorySize)
+		}
+
+		if in.cfg.Debug {
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, callContext, in.returnData, in.evm.Depth, err)
+			logged = true
+		}
+
+		res, err = operation.execute(&pc, in, callContext)
 
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
