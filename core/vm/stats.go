@@ -22,7 +22,6 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
-	"math/big"
 	"time"
 )
 
@@ -36,19 +35,19 @@ type SmartContractData struct {
 
 // Micro-profiling statistic for the VM
 type VmMicroData struct {
-	opCodeFrequency      map[OpCode]big.Int       // opcode frequency statistics
-	opCodeDuration       map[OpCode]big.Int       // accumulated duration of opcodes
-	instructionFrequency map[uint64]big.Int       // instruction frequency statistics
-	stepLengthFrequency  map[int]big.Int          // smart contract length frequency
+	opCodeFrequency      map[OpCode]uint64       // opcode frequency statistics
+	opCodeDuration       map[OpCode]uint64       // accumulated duration of opcodes
+	instructionFrequency map[uint64]uint64       // instruction frequency statistics
+	stepLengthFrequency  map[int]uint64          // smart contract length frequency
 }
 
 // Create new micro-profiling statistic
 func NewVmMicroData() *VmMicroData {
 	p := new(VmMicroData)
-	p.opCodeFrequency = make(map[OpCode]big.Int)
-	p.opCodeDuration = make(map[OpCode]big.Int)
-	p.instructionFrequency = make(map[uint64]big.Int)
-	p.stepLengthFrequency = make(map[int]big.Int)
+	p.opCodeFrequency = make(map[OpCode]uint64)
+	p.opCodeDuration = make(map[OpCode]uint64)
+	p.instructionFrequency = make(map[uint64]uint64)
+	p.stepLengthFrequency = make(map[int]uint64)
 	return p
 }
 
@@ -70,29 +69,21 @@ func DataCollector(idx int, ctx context.Context, done chan struct{}, vmStats *Vm
 
 			// update opcode frequency
 			for opCode, freq := range scd.OpCodeFrequency {
-				value := vmStats.opCodeFrequency[opCode]
-				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-				vmStats.opCodeFrequency[opCode] = value
+				vmStats.opCodeFrequency[opCode] += freq
 			}
 
 			// update instruction opCodeDuration
 			for opCode, duration := range scd.OpCodeDuration {
-				value := vmStats.opCodeDuration[opCode]
-				value.Add(&value, new(big.Int).SetUint64(uint64(duration)))
-				vmStats.opCodeDuration[opCode] = value
+				vmStats.opCodeDuration[opCode] += uint64(duration)
 			}
 
 			// update instruction frequency
 			for instruction, freq := range scd.InstructionFrequency {
-				value := vmStats.instructionFrequency[instruction]
-				value.Add(&value, new(big.Int).SetUint64(uint64(freq)))
-				vmStats.instructionFrequency[instruction] = value
+				vmStats.instructionFrequency[instruction] += freq
 			}
 
 			// step length frequency
-			value := vmStats.stepLengthFrequency[scd.StepLength]
-			value.Add(&value, new(big.Int).SetUint64(uint64(1)))
-			vmStats.stepLengthFrequency[scd.StepLength] = value
+			vmStats.stepLengthFrequency[scd.StepLength] ++
 
 		// receive stop signal?
 		case <-ctx.Done():
@@ -109,33 +100,25 @@ func ProcessSmartContractData(scd *SmartContractData) {
 }
 
 // Merge two micro-profiling statistics
-func (vmStats *VmMicroData) merge(src *VmMicroData) {
+func (vmStats *VmMicroData) Merge(src *VmMicroData) {
 	// update opcode frequency
 	for opCode, freq := range src.opCodeFrequency {
-		value := vmStats.opCodeFrequency[opCode]
-		value.Add(&value, &freq)
-		vmStats.opCodeFrequency[opCode] = value
+		vmStats.opCodeFrequency[opCode] += freq
 	}
 
 	// update instruction opCodeDuration
 	for opCode, duration := range src.opCodeDuration {
-		value := vmStats.opCodeDuration[opCode]
-		value.Add(&value, &duration)
-		vmStats.opCodeDuration[opCode] = value
+		vmStats.opCodeDuration[opCode] += uint64(duration)
 	}
 
 	// update instruction frequency
 	for instruction, freq := range src.instructionFrequency {
-		value := vmStats.instructionFrequency[instruction]
-		value.Add(&value, &freq)
-		vmStats.instructionFrequency[instruction] = value
+		vmStats.instructionFrequency[instruction] += freq
 	}
 
 	// step length frequency
 	for length, freq := range src.stepLengthFrequency {
-		value := vmStats.stepLengthFrequency[length]
-		value.Add(&value, &freq)
-		vmStats.stepLengthFrequency[length] = value
+		vmStats.stepLengthFrequency[length] += freq
 	}
 
 }
@@ -154,7 +137,7 @@ func (vmStats *VmMicroData) dumpOpCodeFrequency(db *sql.DB) {
 		log.Fatalln(err.Error())
 	}
 	for opCode, freq := range vmStats.opCodeFrequency {
-		_, err = statement.Exec(opCode, freq.String())
+		_, err = statement.Exec(opCode, freq)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -163,7 +146,7 @@ func (vmStats *VmMicroData) dumpOpCodeFrequency(db *sql.DB) {
 }
 
 // update statistics
-func (vmStats *VmMicroData) dump() {
+func (vmStats *VmMicroData) Dump() {
 
 	// open sqlite3 database
 	db, err := sql.Open("sqlite3", "./profiling.db") // Open the created SQLite File
@@ -185,22 +168,19 @@ func (vmStats *VmMicroData) dump() {
 
 	// print total opcode duration in seconds
 	for opCode, duration := range vmStats.opCodeDuration {
-		seconds := new(big.Int)
-		seconds.Div(&duration, big.NewInt(int64(1000000000)))
-		fmt.Printf("opcode-runtime-total-s: %v,%v\n", opCodeToString[opCode], seconds.String())
-		average := new(big.Int)
+		fmt.Printf("opcode-runtime-total-s: %v,%v\n", opCodeToString[opCode], duration)
 		divisor := vmStats.opCodeFrequency[opCode]
-		average.Div(&duration, &divisor)
-		fmt.Printf("opcode-runtime-avg-ns: %v,%v\n", opCodeToString[opCode], average.String())
+		average := duration / divisor
+		fmt.Printf("opcode-runtime-avg-ns: %v,%v\n", opCodeToString[opCode], average)
 	}
 
 	// print instruction frequency
 	for instruction, freq := range vmStats.instructionFrequency {
-		fmt.Printf("instruction-freq: %v,%v\n", instruction, freq.String())
+		fmt.Printf("instruction-freq: %v,%v\n", instruction, freq)
 	}
 
 	// print step-length frequency
 	for length, freq := range vmStats.stepLengthFrequency {
-		fmt.Printf("steplen-freq: %v,%v\n", length, freq.String())
+		fmt.Printf("steplen-freq: %v,%v\n", length, freq)
 	}
 }
