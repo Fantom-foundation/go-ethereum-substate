@@ -139,7 +139,7 @@ func (mps *MicroProfileStatistic) dumpOpCodeFrequency(db *sql.DB) {
 		log.Fatalln(err.Error())
 	}
 	for opCode, freq := range mps.opCodeFrequency {
-		_, err = statement.Exec(opCode, freq)
+		_, err = statement.Exec(opCodeToString[opCode], freq)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -161,7 +161,7 @@ func (mps *MicroProfileStatistic) dumpOpCodeDuration(db *sql.DB) {
 		log.Fatalln(err.Error())
 	}
 	for opCode, duration := range mps.opCodeDuration {
-		_, err = statement.Exec(opCode, duration)
+		_, err = statement.Exec(opCodeToString[opCode], duration)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -200,7 +200,7 @@ func (mps *MicroProfileStatistic) dumpStepLengthFrequency(db *sql.DB) {
 	}
 
 	// prepare an insert statement for faster inserts and insert frequencies
-	statement, err := db.Prepare("INSERT INTO InstructionFrequency(steplength, frequency) VALUES (?, ?)")
+	statement, err := db.Prepare("INSERT INTO StepLengthFrequency(steplength, frequency) VALUES (?, ?)")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
@@ -240,7 +240,7 @@ func (mps *MicroProfileStatistic) Dump(version string) {
 		log.Fatalln(err.Error())
 	}
 
-	_, err = db.Exec("INSERT INTO Information(version) VALUES (" + version + ")")
+	_, err = db.Exec("INSERT INTO Information (version) VALUES (\"" + version + "\")")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
