@@ -43,7 +43,7 @@ type MicroProfileStatistic struct {
 // Buffer size for micro-profiling channel
 var MicroProfilingBufferSize int = 100000
 
-// Buffer size for micro-profiling channel
+// Name of micro-profiling SQLITE3 database
 var MicroProfilingDB string = "./microprofiling.db"
 
 // Micro-Profiling channel
