@@ -40,11 +40,14 @@ type MicroProfileStatistic struct {
 	stepLengthFrequency  map[int]uint64    // smart contract length frequency
 }
 
-// Channel for communication
-// TODO: Buffer size as cli argument
-const chSize = 100000
+// Buffer size for micro-profiling channel
+var MicroProfilingBufferSize int = 100000
 
-var ch chan *MicroProfileData = make(chan *MicroProfileData, chSize)
+// Buffer size for micro-profiling channel
+var MicroProfilingDB string = "./microprofiling.db"
+
+// Micro-Profiling channel
+var mpChannel chan *MicroProfileData = make(chan *MicroProfileData, MicroProfilingBufferSize)
 
 // Create new micro-profiling statistic
 func NewMicroProfileStatistic() *MicroProfileStatistic {
@@ -64,7 +67,7 @@ func MicroProfilingCollector(idx int, ctx context.Context, done chan struct{}, m
 		select {
 
 		// receive a new data record from a worker?
-		case mpd := <-ch:
+		case mpd := <- mpChannel:
 			// process the data record and update the statistic
 
 			// update op-code frequency
@@ -87,7 +90,7 @@ func MicroProfilingCollector(idx int, ctx context.Context, done chan struct{}, m
 
 		// receive stop signal?
 		case <-ctx.Done():
-			if len(ch) == 0 {
+			if len(mpChannel) == 0 {
 				return
 			}
 		}
@@ -96,7 +99,7 @@ func MicroProfilingCollector(idx int, ctx context.Context, done chan struct{}, m
 
 // put micro profiling data into the processing queue
 func ProcessMicroProfileData(mpd *MicroProfileData) {
-	ch <- mpd
+	mpChannel <- mpd
 }
 
 // Merge two micro-profiling statistics
@@ -215,7 +218,7 @@ func (mps *MicroProfileStatistic) Dump(version string) {
 
 	// open sqlite3 database
 	// TODO: have parameters for sqlite3 database name
-	db, err := sql.Open("sqlite3", "./profiling.db") // Open the created SQLite File
+	db, err := sql.Open("sqlite3", MicroProfilingDB) // Open the created SQLite File
 	if err != nil {
 		log.Fatal(err.Error())
 	}
