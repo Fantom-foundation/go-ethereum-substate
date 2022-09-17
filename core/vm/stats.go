@@ -211,7 +211,7 @@ func (mps *MicroProfileStatistic) dumpStepLengthFrequency(db *sql.DB) {
 }
 
 // dump micro-profiling statistic into a sqlite3 database
-func (mps *MicroProfileStatistic) Dump() {
+func (mps *MicroProfileStatistic) Dump(version string) {
 
 	// open sqlite3 database
 	// TODO: have parameters for sqlite3 database name
@@ -227,7 +227,20 @@ func (mps *MicroProfileStatistic) Dump() {
 		log.Fatalln(err.Error())
 	}
 
-	// TODO: write version number and log record
+	_, err = db.Exec("PRAGMA synchronous = OFF;PRAGMA journal_mode = MEMORY;")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Information ( version TEXT );")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	_, err = db.Exec("INSERT INTO Information(version) VALUES (" + version + ")")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 
 	// dump op-code frequencies
 	mps.dumpOpCodeFrequency(db)
