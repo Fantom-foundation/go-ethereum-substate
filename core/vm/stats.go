@@ -237,7 +237,7 @@ func (mps *MicroProfileStatistic) Dump(version string) {
 		log.Fatalln(err.Error())
 	}
 
-	_, err = db.Exec("INSERT INTO Information(version) VALUES (" + version + ")")
+	_, err = db.Exec("INSERT INTO Information (version) VALUES (\"" + version + "\")")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
