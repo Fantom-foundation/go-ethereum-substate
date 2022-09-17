@@ -19,31 +19,36 @@ package vm
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"time"
 )
 
 // Micro-Profiling data record for a single smart contract invocation
-type SmartContractData struct {
+type MicroProfileData struct {
 	OpCodeFrequency      map[OpCode]uint64        // opcode frequency stats
 	OpCodeDuration       map[OpCode]time.Duration // opcode durations stats
 	InstructionFrequency map[uint64]uint64        // instruction frequency stats
 	StepLength           int                      // number of executed instructions
 }
 
-// Micro-profiling statistic for the VM
-type VmMicroData struct {
-	opCodeFrequency      map[OpCode]uint64       // opcode frequency statistics
-	opCodeDuration       map[OpCode]uint64       // accumulated duration of opcodes
-	instructionFrequency map[uint64]uint64       // instruction frequency statistics
-	stepLengthFrequency  map[int]uint64          // smart contract length frequency
+// Micro-profiling statistic
+type MicroProfileStatistic struct {
+	opCodeFrequency      map[OpCode]uint64 // opcode frequency statistics
+	opCodeDuration       map[OpCode]uint64 // accumulated duration of opcodes
+	instructionFrequency map[uint64]uint64 // instruction frequency statistics
+	stepLengthFrequency  map[int]uint64    // smart contract length frequency
 }
 
+// Channel for communication
+// TODO: Buffer size as cli argument
+const chSize = 100000
+
+var ch chan *MicroProfileData = make(chan *MicroProfileData, chSize)
+
 // Create new micro-profiling statistic
-func NewVmMicroData() *VmMicroData {
-	p := new(VmMicroData)
+func NewMicroProfileStatistic() *MicroProfileStatistic {
+	p := new(MicroProfileStatistic)
 	p.opCodeFrequency = make(map[OpCode]uint64)
 	p.opCodeDuration = make(map[OpCode]uint64)
 	p.instructionFrequency = make(map[uint64]uint64)
@@ -51,39 +56,34 @@ func NewVmMicroData() *VmMicroData {
 	return p
 }
 
-// Channel for communication
-// TODO: Buffer size as cli argument
-const chSize = 100000
-var ch chan *SmartContractData = make(chan *SmartContractData, chSize)
-
 // The data collector checks for a stopping signal and processes
 // the workers' records via a channel. A data collector is a background task.
-func DataCollector(idx int, ctx context.Context, done chan struct{}, vmStats *VmMicroData) {
+func MicroProfilingCollector(idx int, ctx context.Context, done chan struct{}, mps *MicroProfileStatistic) {
 	defer close(done)
 	for {
 		select {
 
 		// receive a new data record from a worker?
-		case scd := <-ch:
+		case mpd := <-ch:
 			// process the data record and update the statistic
 
-			// update opcode frequency
-			for opCode, freq := range scd.OpCodeFrequency {
-				vmStats.opCodeFrequency[opCode] += freq
+			// update op-code frequency
+			for opCode, freq := range mpd.OpCodeFrequency {
+				mps.opCodeFrequency[opCode] += freq
 			}
 
-			// update instruction opCodeDuration
-			for opCode, duration := range scd.OpCodeDuration {
-				vmStats.opCodeDuration[opCode] += uint64(duration)
+			// update op-code duration
+			for opCode, duration := range mpd.OpCodeDuration {
+				mps.opCodeDuration[opCode] += uint64(duration)
 			}
 
 			// update instruction frequency
-			for instruction, freq := range scd.InstructionFrequency {
-				vmStats.instructionFrequency[instruction] += freq
+			for instructions, freq := range mpd.InstructionFrequency {
+				mps.instructionFrequency[instructions] += freq
 			}
 
 			// step length frequency
-			vmStats.stepLengthFrequency[scd.StepLength] ++
+			mps.stepLengthFrequency[mpd.StepLength]++
 
 		// receive stop signal?
 		case <-ctx.Done():
@@ -94,49 +94,48 @@ func DataCollector(idx int, ctx context.Context, done chan struct{}, vmStats *Vm
 	}
 }
 
-// Put record into queue for later processing by collector worker
-func ProcessSmartContractData(scd *SmartContractData) {
-	ch <- scd
+// put micro profiling data into the processing queue
+func ProcessMicroProfileData(mpd *MicroProfileData) {
+	ch <- mpd
 }
 
 // Merge two micro-profiling statistics
-func (vmStats *VmMicroData) Merge(src *VmMicroData) {
+func (mps *MicroProfileStatistic) Merge(src *MicroProfileStatistic) {
 	// update opcode frequency
 	for opCode, freq := range src.opCodeFrequency {
-		vmStats.opCodeFrequency[opCode] += freq
+		mps.opCodeFrequency[opCode] += freq
 	}
 
 	// update instruction opCodeDuration
 	for opCode, duration := range src.opCodeDuration {
-		vmStats.opCodeDuration[opCode] += uint64(duration)
+		mps.opCodeDuration[opCode] += uint64(duration)
 	}
 
 	// update instruction frequency
-	for instruction, freq := range src.instructionFrequency {
-		vmStats.instructionFrequency[instruction] += freq
+	for instructions, freq := range src.instructionFrequency {
+		mps.instructionFrequency[instructions] += freq
 	}
 
 	// step length frequency
 	for length, freq := range src.stepLengthFrequency {
-		vmStats.stepLengthFrequency[length] += freq
+		mps.stepLengthFrequency[length] += freq
 	}
-
 }
 
 // dump opcode frequency stats into a SQLITE3 database
-func (vmStats *VmMicroData) dumpOpCodeFrequency(db *sql.DB) {
+func (mps *MicroProfileStatistic) dumpOpCodeFrequency(db *sql.DB) {
 	// drop old frequency table and create new one
-	_, err := db.Exec("DROP TABLE IF EXISTS OpCodeFrequency;CREATE TABLE opcode_frequency ( opcode TEXT NOT NULL, freq INTEGER NOT NULL, PRIMARY KEY (opcode));")
+	_, err := db.Exec("DROP TABLE IF EXISTS OpCodeFrequency;CREATE TABLE OpCodeFrequency ( opcode TEXT NOT NULL, frequency INTEGER NOT NULL, PRIMARY KEY (opcode));")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 
 	// prepare an insert statement for faster inserts and insert frequencies
-	statement, err := db.Prepare("INSERT INTO opcode_frequency(opcode, frequency) VALUES (?, ?)")
+	statement, err := db.Prepare("INSERT INTO OpCodeFrequency(opcode, frequency) VALUES (?, ?)")
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
-	for opCode, freq := range vmStats.opCodeFrequency {
+	for opCode, freq := range mps.opCodeFrequency {
 		_, err = statement.Exec(opCode, freq)
 		if err != nil {
 			log.Fatalln(err.Error())
@@ -145,10 +144,77 @@ func (vmStats *VmMicroData) dumpOpCodeFrequency(db *sql.DB) {
 	}
 }
 
-// update statistics
-func (vmStats *VmMicroData) Dump() {
+// dump opcode duration statistic
+func (mps *MicroProfileStatistic) dumpOpCodeDuration(db *sql.DB) {
+	// drop old frequency table and create new one
+	_, err := db.Exec("DROP TABLE IF EXISTS OpCodeDuration;CREATE TABLE OpCodeDuration ( opcode TEXT NOT NULL, duration NUMERIC NOT NULL, PRIMARY KEY (opcode));")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// prepare an insert statement for faster inserts and insert frequencies
+	statement, err := db.Prepare("INSERT INTO OpCodeDuration(opcode, duration) VALUES (?, ?)")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	for opCode, duration := range mps.opCodeDuration {
+		_, err = statement.Exec(opCode, duration)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+	}
+}
+
+// dump instruction frequency statistic
+func (mps *MicroProfileStatistic) dumpInstructionFrequency(db *sql.DB) {
+	// drop old frequency table and create new one
+	_, err := db.Exec("DROP TABLE IF EXISTS InstructionFrequency;CREATE TABLE InstructionFrequency ( instructions INTEGER NOT NULL, frequency INTEGER NOT NULL, PRIMARY KEY (instructions));")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// prepare an insert statement for faster inserts and insert frequencies
+	statement, err := db.Prepare("INSERT INTO InstructionFrequency(instructions, frequency) VALUES (?, ?)")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	for instructions, freq := range mps.instructionFrequency {
+		_, err = statement.Exec(instructions, freq)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+	}
+}
+
+// dump step-length frequency statistic
+func (mps *MicroProfileStatistic) dumpStepLengthFrequency(db *sql.DB) {
+	// drop old frequency table and create new one
+	_, err := db.Exec("DROP TABLE IF EXISTS StepLengthFrequency;CREATE TABLE StepLengthFrequency ( steplength INTEGER NOT NULL, frequency INTEGER NOT NULL, PRIMARY KEY (steplength));")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// prepare an insert statement for faster inserts and insert frequencies
+	statement, err := db.Prepare("INSERT INTO InstructionFrequency(steplength, frequency) VALUES (?, ?)")
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	for length, freq := range mps.stepLengthFrequency {
+		_, err = statement.Exec(length, freq)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
+
+	}
+}
+
+// dump micro-profiling statistic into a sqlite3 database
+func (mps *MicroProfileStatistic) Dump() {
 
 	// open sqlite3 database
+	// TODO: have parameters for sqlite3 database name
 	db, err := sql.Open("sqlite3", "./profiling.db") // Open the created SQLite File
 	if err != nil {
 		log.Fatal(err.Error())
@@ -163,24 +229,15 @@ func (vmStats *VmMicroData) Dump() {
 
 	// TODO: write version number and log record
 
-	// Dump basic block frequency stats into a SQLITE database
-	vmStats.dumpOpCodeFrequency(db)
+	// dump op-code frequencies
+	mps.dumpOpCodeFrequency(db)
 
-	// print total opcode duration in seconds
-	for opCode, duration := range vmStats.opCodeDuration {
-		fmt.Printf("opcode-runtime-total-s: %v,%v\n", opCodeToString[opCode], duration)
-		divisor := vmStats.opCodeFrequency[opCode]
-		average := duration / divisor
-		fmt.Printf("opcode-runtime-avg-ns: %v,%v\n", opCodeToString[opCode], average)
-	}
+	// dump op-code durations
+	mps.dumpOpCodeDuration(db)
 
-	// print instruction frequency
-	for instruction, freq := range vmStats.instructionFrequency {
-		fmt.Printf("instruction-freq: %v,%v\n", instruction, freq)
-	}
+	// dump instruction frequency
+	mps.dumpInstructionFrequency(db)
 
-	// print step-length frequency
-	for length, freq := range vmStats.stepLengthFrequency {
-		fmt.Printf("steplen-freq: %v,%v\n", length, freq)
-	}
+	// dump step-length frequency
+	mps.dumpStepLengthFrequency(db)
 }

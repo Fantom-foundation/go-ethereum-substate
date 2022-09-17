@@ -214,12 +214,11 @@ func (s *InterpreterState) Stop() {
 // Proxy run function
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
 	if ProfileEVMOpCode {
-		return in.runProfileOpCode(state,input,readOnly)
+		return in.runProfileOpCode(state, input, readOnly)
 	} else {
-		return in.runPlain(state,input,readOnly)
+		return in.runPlain(state, input, readOnly)
 	}
 }
-
 
 // run with profiling op-codes enabled
 func (in *GethEVMInterpreter) runProfileOpCode(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
@@ -266,13 +265,13 @@ func (in *GethEVMInterpreter) runProfileOpCode(state *InterpreterState, input []
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy              uint64                       // needed for the deferred Tracer
-		gasCopy             uint64                       // for Tracer to log gas remaining before execution
-		logged              bool                         // deferred Tracer should ignore already logged steps
-		res                 []byte                       // result of the opcode execution function
-		opCodeFrequency     = map[OpCode]uint64{}        // op-code frequency stats
-		opCodeDuration      = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
-		pcCounterFrequency  = map[uint64]uint64{}        // pc-counter frequency stats
+		pcCopy             uint64                       // needed for the deferred Tracer
+		gasCopy            uint64                       // for Tracer to log gas remaining before execution
+		logged             bool                         // deferred Tracer should ignore already logged steps
+		res                []byte                       // result of the opcode execution function
+		opCodeFrequency    = map[OpCode]uint64{}        // op-code frequency stats
+		opCodeDuration     = map[OpCode]time.Duration{} // op-code duration stats (accumulated)
+		pcCounterFrequency = map[uint64]uint64{}        // pc-counter frequency stats
 
 	)
 
@@ -300,21 +299,21 @@ func (in *GethEVMInterpreter) runProfileOpCode(state *InterpreterState, input []
 
 	// record the opcodes counts and length
 	defer func() {
-			// compute frequency statistics for instructions
-			instructionFrequency := map[uint64]uint64{}
-			for _, ctr := range pcCounterFrequency {
-				instructionFrequency[ctr]++
-			}
+		// compute frequency statistics for instructions
+		instructionFrequency := map[uint64]uint64{}
+		for _, ctr := range pcCounterFrequency {
+			instructionFrequency[ctr]++
+		}
 
-			// construct statistical observation
-			scd := SmartContractData{ 
-				OpCodeFrequency:      opCodeFrequency,
-				OpCodeDuration:       opCodeDuration,
-				InstructionFrequency: instructionFrequency,
-				StepLength:           steps}
+		// construct statistical observation
+		scd := MicroProfileData{
+			OpCodeFrequency:      opCodeFrequency,
+			OpCodeDuration:       opCodeDuration,
+			InstructionFrequency: instructionFrequency,
+			StepLength:           steps}
 
-			// process statistical observation
-			ProcessSmartContractData(&scd)
+		// process statistical observation
+		ProcessMicroProfileData(&scd)
 	}()
 
 	for {
@@ -514,10 +513,10 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy              uint64                       // needed for the deferred Tracer
-		gasCopy             uint64                       // for Tracer to log gas remaining before execution
-		logged              bool                         // deferred Tracer should ignore already logged steps
-		res                 []byte                       // result of the opcode execution function
+		pcCopy  uint64 // needed for the deferred Tracer
+		gasCopy uint64 // for Tracer to log gas remaining before execution
+		logged  bool   // deferred Tracer should ignore already logged steps
+		res     []byte // result of the opcode execution function
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
