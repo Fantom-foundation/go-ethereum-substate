@@ -62,13 +62,6 @@ func NewMicroProfileStatistic() *MicroProfileStatistic {
 	return p
 }
 
-// Create new micro-profiling statistic
-func NewBasicBlockProfileStatistic() *BasicBlockProfileStatistic {
-	p := new(BasicBlockProfileStatistic)
-	p.basicBlockFrequency = make(map[BasicBlockKey]uint64)
-	return p
-}
-
 // The data collector checks for a stopping signal and processes
 // the workers' records via a channel. A data collector is a background task.
 func MicroProfilingCollector(ctx context.Context, done chan struct{}, mps *MicroProfileStatistic) {
