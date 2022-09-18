@@ -314,14 +314,14 @@ func (in *GethEVMInterpreter) runMicroProfiling(state *InterpreterState, input [
 		}
 
 		// construct statistical observation
-		scd := MicroProfileData{
+		mpd := MicroProfileData{
 			OpCodeFrequency:      opCodeFrequency,
 			OpCodeDuration:       opCodeDuration,
 			InstructionFrequency: instructionFrequency,
 			StepLength:           steps}
 
 		// process statistical observation
-		ProcessMicroProfileData(&scd)
+		ProcessMicroProfileData(&mpd)
 	}()
 
 	for {
@@ -525,7 +525,7 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
 		res     []byte // result of the opcode execution function
-		basicBlockFrequency = map[uint64]BasicBlock{}    // basic block map that translates an address to a basic block
+		basicBlockFrequency = map[uint]BasicBlock{}    // basic block map that translates an address to a basic block
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
@@ -549,6 +549,14 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	steps := 0
+
+	defer func() {
+		// process basic block frequencies
+		bbpd := BasicBlockProfileData{
+			Contract: *contract.CodeAddr,
+			BasicBlockFrequency:  basicBlockFrequency}
+		ProcessBasicBlockProfileData(&bbpd)
+	}()
 
 	for {
 		// Block until next step should be processed.
@@ -640,7 +648,7 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 		}
 
 		if op == JUMPDEST {
-			if _, ok := basicBlockFrequency[pc]; !ok {
+			if _, ok := basicBlockFrequency[uint(pc)]; !ok {
 				// basic block not found in frequency map
 				// => create new one
 				idx := pc
@@ -700,11 +708,11 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 					// skip to next instruction
 					idx++
 				}
-				basicBlockFrequency[pc] = BasicBlock{Instructions: instructions, Frequency: 1}
+				basicBlockFrequency[uint(pc)] = BasicBlock{Instructions: instructions, Frequency: 1}
 			} else {
-				bb := basicBlockFrequency[pc]
+				bb := basicBlockFrequency[uint(pc)]
 				bb.Frequency++
-				basicBlockFrequency[pc] = bb
+				basicBlockFrequency[uint(pc)] = bb
 			}
 		}
 		res, err = operation.execute(&pc, in, callContext)
