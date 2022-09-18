@@ -213,7 +213,7 @@ func (s *InterpreterState) Stop() {
 
 // Proxy run function
 func (in *GethEVMInterpreter) run(state *InterpreterState, input []byte, readOnly bool) (ret []byte, err error) {
-	if ProfileEVMOpCode {
+	if MicroProfiling {
 		return in.runProfileOpCode(state, input, readOnly)
 	} else {
 		return in.runPlain(state, input, readOnly)

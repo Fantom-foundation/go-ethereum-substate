@@ -40,6 +40,12 @@ type MicroProfileStatistic struct {
 	stepLengthFrequency  map[int]uint64    // smart contract length frequency
 }
 
+// profiling flag for state transition
+var ProfileEVMCall bool
+
+// MicroProfile cli flag
+var MicroProfiling bool
+
 // Buffer size for micro-profiling channel
 var MicroProfilingBufferSize int = 100000
 
