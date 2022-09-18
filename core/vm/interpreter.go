@@ -53,6 +53,12 @@ type ScopeContext struct {
 	Contract *Contract
 }
 
+// BasicBlock contains the instructions and the execution frequency.
+type BasicBlock struct {
+	Instructions []byte // instructions without parameters for PUSHx
+	Frequency    uint64 // dynamic execution frequency
+}
+
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
 // Read to get a variable amount of data from the hash state. Read is faster than Sum
 // because it doesn't copy the internal state, but also modifies the internal state.
@@ -519,6 +525,7 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
 		res     []byte // result of the opcode execution function
+		basicBlockFrequency = map[uint64]BasicBlock{}    // basic block map that translates an address to a basic block
 
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
@@ -632,6 +639,74 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 			logged = true
 		}
 
+		if op == JUMPDEST {
+			if _, ok := basicBlockFrequency[pc]; !ok {
+				// basic block not found in frequency map
+				// => create new one
+				idx := pc
+				instructions := []byte{}
+				length := uint64(len(contract.Code))
+				for {
+
+					// exceed code size
+					if idx >= length {
+						break
+					}
+
+					// fetch op-code
+					op := contract.GetOp(idx)
+					instructions = append(instructions, byte(op))
+
+					// end of basic block?
+					if op == JUMP ||
+						op == JUMPI ||
+						op == STOP ||
+						op == RETURN ||
+						op == REVERT ||
+						op == SELFDESTRUCT {
+						break
+					}
+
+					// skip constant of a push operation
+					if op >= PUSH1 && op <= PUSH32 {
+						numbits := op - PUSH1 + 1
+						if numbits >= 8 {
+							for ; numbits >= 16; numbits -= 16 {
+								idx += 16
+							}
+							for ; numbits >= 8; numbits -= 8 {
+								idx += 8
+							}
+						}
+						switch numbits {
+						case 1:
+							idx += 1
+						case 2:
+							idx += 2
+						case 3:
+							idx += 3
+						case 4:
+							idx += 4
+						case 5:
+							idx += 5
+						case 6:
+							idx += 6
+						case 7:
+							idx += 7
+						}
+
+					}
+
+					// skip to next instruction
+					idx++
+				}
+				basicBlockFrequency[pc] = BasicBlock{Instructions: instructions, Frequency: 1}
+			} else {
+				bb := basicBlockFrequency[pc]
+				bb.Frequency++
+				basicBlockFrequency[pc] = bb
+			}
+		}
 		res, err = operation.execute(&pc, in, callContext)
 
 		// if the operation clears the return data (e.g. it has returning data)
