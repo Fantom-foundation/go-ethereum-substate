@@ -43,8 +43,11 @@ type MicroProfileStatistic struct {
 // profiling flag for state transition
 var ProfileEVMCall bool
 
-// MicroProfile cli flag
+// Micro profiling flag controlled by cli
 var MicroProfiling bool
+
+// Basic-block profiling flag controlled by cli
+var BasicBlockProfiling bool
 
 // Buffer size for micro-profiling channel
 var MicroProfilingBufferSize int = 100000
