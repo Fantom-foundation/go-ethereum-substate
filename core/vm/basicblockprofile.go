@@ -21,20 +21,10 @@ import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
-	"time"
+	"encoding/hex"
+
+	"github.com/ethereum/go-ethereum/common"
 )
-
-// Basic-block data record for a single smart contract invocation
-type BasicBlockKey struct {
-	Contract     string // contract in hex format
-	Instructions string // instructions in hex format
-	Address      uint64 // basic-block start address
-}
-
-// Basic-block statistic
-type BasicBlockProfileStatistic struct {
-	basicBlockFrequency  map[BasicBlockKey]uint64 // basic block statistics
-}
 
 // Basic-block profiling flag controlled by cli
 var BasicBlockProfiling bool
@@ -45,8 +35,27 @@ const BasicBlockMaxNumRecords = 1000
 // Buffer size for micro-profiling channel
 var BasicBlockProfilingBufferSize int = 100000
 
+
+// Basic-block data record for a single smart contract invocation
+type BasicBlockProfileData struct {
+	Contract            common.Address      // contract in hex format
+	BasicBlockFrequency map[uint]BasicBlock // basic block frequency
+}
+
+// Basic-block data record for a single smart contract invocation
+type BasicBlockKey struct {
+	Contract     string // contract in hex format
+	Instructions string // instructions in hex format
+	Address      uint   // basic-block start address
+}
+
+// Basic-block statistic
+type BasicBlockProfileStatistic struct {
+	basicBlockFrequency map[BasicBlockKey]uint64 // basic block statistics
+}
+
 // Basic-Block Profiling channel
-var bbpChannel chan *BasicBlockProfilingData = make(chan *BasicBlockProfilingData, BasicBlockProfilingBufferSize)
+var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, BasicBlockProfilingBufferSize)
 
 // Create new micro-profiling statistic
 func NewBasicBlockProfileStatistic() *BasicBlockProfileStatistic {
@@ -63,9 +72,11 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 		select {
 
 		// receive a new data record from a worker?
-		case bbpd := <- bbpChannel:
-			// process the data record and update the statistic
-			bbps.basicBlockFrequency[ppbd] += freq
+		case bbpd := <-bbpChannel:
+			for addr, bb := range bbpd.BasicBlockFrequency {
+				bkey := BasicBlockKey{Contract: bbpd.Contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
+				bbps.basicBlockFrequency[bkey] += bb.Frequency
+			}
 
 		// receive stop signal?
 		case <-ctx.Done():
@@ -78,7 +89,7 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 
 // put micro profiling data into the processing queue
 func ProcessBasicBlockProfileData(bbpd *BasicBlockProfileData) {
-	mpChannel <- bbpd
+	bbpChannel <- bbpd
 }
 
 // Merge two basic-block profiling statistics
@@ -90,7 +101,7 @@ func (bbps *BasicBlockProfileStatistic) Merge(src *BasicBlockProfileStatistic) {
 }
 
 // dump basic block frequency stats into a SQLITE3 database
-func (bbps *BasicBlockProfilingStatistic) Dump() {
+func (bbps *BasicBlockProfileStatistic) Dump() {
 	// Dump basic-block frequency statistics into a SQLITE3 database
 
 	// open sqlite3 database
