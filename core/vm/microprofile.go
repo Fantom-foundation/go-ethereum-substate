@@ -40,20 +40,14 @@ type MicroProfileStatistic struct {
 	stepLengthFrequency  map[int]uint64    // smart contract length frequency
 }
 
-// profiling flag for state transition
-var ProfileEVMCall bool
-
 // Micro profiling flag controlled by cli
 var MicroProfiling bool
-
-// Basic-block profiling flag controlled by cli
-var BasicBlockProfiling bool
 
 // Buffer size for micro-profiling channel
 var MicroProfilingBufferSize int = 100000
 
 // Name of micro-profiling SQLITE3 database
-var MicroProfilingDB string = "./microprofiling.db"
+var MicroProfilingDB string = "./profiling.db"
 
 // Micro-Profiling channel
 var mpChannel chan *MicroProfileData = make(chan *MicroProfileData, MicroProfilingBufferSize)
@@ -68,9 +62,16 @@ func NewMicroProfileStatistic() *MicroProfileStatistic {
 	return p
 }
 
+// Create new micro-profiling statistic
+func NewBasicBlockProfileStatistic() *BasicBlockProfileStatistic {
+	p := new(BasicBlockProfileStatistic)
+	p.basicBlockFrequency = make(map[BasicBlockKey]uint64)
+	return p
+}
+
 // The data collector checks for a stopping signal and processes
 // the workers' records via a channel. A data collector is a background task.
-func MicroProfilingCollector(idx int, ctx context.Context, done chan struct{}, mps *MicroProfileStatistic) {
+func MicroProfilingCollector(ctx context.Context, done chan struct{}, mps *MicroProfileStatistic) {
 	defer close(done)
 	for {
 		select {
@@ -221,6 +222,7 @@ func (mps *MicroProfileStatistic) dumpStepLengthFrequency(db *sql.DB) {
 
 	}
 }
+
 
 // dump micro-profiling statistic into a sqlite3 database
 func (mps *MicroProfileStatistic) Dump(version string) {
