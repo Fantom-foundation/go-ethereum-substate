@@ -33,8 +33,10 @@ var BasicBlockProfiling bool
 const BasicBlockMaxNumRecords = 1000
 
 // Buffer size for micro-profiling channel
-var BasicBlockProfilingBufferSize int = 100000
+var BasicBlockProfilingBufferSize int
 
+// Name of SQLITE3 database
+var BasicBlockProfilingDB string
 
 // Basic-block data record for a single smart contract invocation
 type BasicBlockProfileData struct {
@@ -105,7 +107,7 @@ func (bbps *BasicBlockProfileStatistic) Dump() {
 	// Dump basic-block frequency statistics into a SQLITE3 database
 
 	// open sqlite3 database
-	db, err := sql.Open("sqlite3", "./basicblocks.db") // Open the created SQLite File
+	db, err := sql.Open("sqlite3", BasicBlockProfilingDB) // Open the created SQLite File
 	if err != nil {
 		log.Fatal(err.Error())
 	}

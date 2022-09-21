@@ -44,10 +44,10 @@ type MicroProfileStatistic struct {
 var MicroProfiling bool
 
 // Buffer size for micro-profiling channel
-var MicroProfilingBufferSize int = 100000
+var MicroProfilingBufferSize int
 
 // Name of micro-profiling SQLITE3 database
-var MicroProfilingDB string = "./profiling.db"
+var MicroProfilingDB string
 
 // Micro-Profiling channel
 var mpChannel chan *MicroProfileData = make(chan *MicroProfileData, MicroProfilingBufferSize)
