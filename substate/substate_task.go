@@ -30,11 +30,13 @@ var (
 	}
 )
 
+type SubstateBlockFunc func(block uint64, transactions map[int]*Substate, taskPool *SubstateTaskPool) error
 type SubstateTaskFunc func(block uint64, tx int, substate *Substate, taskPool *SubstateTaskPool) error
 
 type SubstateTaskPool struct {
-	Name     string
-	TaskFunc SubstateTaskFunc
+	Name      string
+	BlockFunc SubstateBlockFunc
+	TaskFunc  SubstateTaskFunc
 
 	First uint64
 	Last  uint64
@@ -70,7 +72,17 @@ func NewSubstateTaskPool(name string, taskFunc SubstateTaskFunc, first, last uin
 
 // ExecuteBlock function iterates on substates of a given block call TaskFunc
 func (pool *SubstateTaskPool) ExecuteBlock(block uint64) (numTx int64, err error) {
-	for tx, substate := range pool.DB.GetBlockSubstates(block) {
+	transactions := pool.DB.GetBlockSubstates(block)
+	if pool.BlockFunc != nil {
+		err := pool.BlockFunc(block, transactions, pool)
+		if err != nil {
+			return numTx, fmt.Errorf("%s: block %v: %v", pool.Name, block, err)
+		}
+	}
+	if pool.TaskFunc == nil {
+		return int64(len(transactions)), nil
+	}
+	for tx, substate := range transactions {
 		alloc := substate.InputAlloc
 		msg := substate.Message
 

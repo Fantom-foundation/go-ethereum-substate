@@ -280,3 +280,167 @@ func (db *SubstateDB) DeleteSubstate(block uint64, tx int) {
 		panic(err)
 	}
 }
+
+type Transaction struct {
+	Block       uint64
+	Transaction int
+	Substate    *Substate
+}
+
+type rawEntry struct {
+	key   []byte
+	value []byte
+}
+
+func parseTransaction(db *SubstateDB, data rawEntry) *Transaction {
+	key := data.key
+	value := data.value
+
+	block, tx, err := DecodeStage1SubstateKey(data.key)
+	if err != nil {
+		panic(fmt.Errorf("record-replay: invalid substate key found: %v - issue: %v", key, err))
+	}
+
+	// try decoding as substates from latest hard forks
+	substateRLP := SubstateRLP{}
+	err = rlp.DecodeBytes(value, &substateRLP)
+
+	if err != nil {
+		// try decoding as legacy substates between Berlin and London hard forks
+		berlinRLP := berlinSubstateRLP{}
+		err = rlp.DecodeBytes(value, &berlinRLP)
+		if err == nil {
+			substateRLP.setBerlinRLP(&berlinRLP)
+		}
+	}
+
+	if err != nil {
+		// try decoding as legacy substates before Berlin hard fork
+		legacyRLP := legacySubstateRLP{}
+		err = rlp.DecodeBytes(value, &legacyRLP)
+		if err != nil {
+			panic(fmt.Errorf("error decoding substateRLP %v_%v: %v", block, tx, err))
+		}
+		substateRLP.setLegacyRLP(&legacyRLP)
+	}
+
+	substate := &Substate{}
+	substate.SetRLP(&substateRLP, db)
+
+	return &Transaction{
+		Block:       block,
+		Transaction: tx,
+		Substate:    substate,
+	}
+}
+
+type SubstateIterator struct {
+	db   *SubstateDB
+	iter ethdb.Iterator
+	cur  *Transaction
+
+	// Connections to parsing pipeline
+	source <-chan *Transaction
+	done   chan<- int
+}
+
+func NewSubstateIterator(start_block uint64, num_workers int) SubstateIterator {
+	db := staticSubstateDB
+	start := Stage1SubstateBlockPrefix(start_block)
+	iter := db.backend.NewIterator(nil, start)
+
+	// Create channels
+	done := make(chan int)
+	raw_data := make([]chan rawEntry, num_workers)
+	results := make([]chan *Transaction, num_workers)
+	result := make(chan *Transaction, 10)
+
+	for i := 0; i < num_workers; i++ {
+		raw_data[i] = make(chan rawEntry, 10)
+		results[i] = make(chan *Transaction, 10)
+	}
+
+	// Start iter => raw data stage
+	go func() {
+		defer func() {
+			for _, c := range raw_data {
+				close(c)
+			}
+		}()
+		step := 0
+		for {
+			if !iter.Next() {
+				return
+			}
+
+			key := make([]byte, len(iter.Key()))
+			copy(key, iter.Key())
+			value := make([]byte, len(iter.Value()))
+			copy(value, iter.Value())
+
+			res := rawEntry{key, value}
+
+			select {
+			case <-done:
+				return
+			case raw_data[step] <- res: // fall-through
+			}
+			step = (step + 1) % num_workers
+		}
+	}()
+
+	// Start raw data => parsed transaction stage (parallel)
+	for i := 0; i < num_workers; i++ {
+		id := i
+		go func() {
+			defer close(results[id])
+			for raw := range raw_data[id] {
+				results[id] <- parseTransaction(db, raw)
+			}
+		}()
+	}
+
+	// Start the go routine moving transactions from parsers to sink in order
+	go func() {
+		defer close(result)
+		step := 0
+		for open_producers := num_workers; open_producers > 0; {
+			next := <-results[step%num_workers]
+			if next != nil {
+				result <- next
+			} else {
+				open_producers--
+			}
+			step++
+		}
+	}()
+
+	return SubstateIterator{
+		db:     db,
+		iter:   iter,
+		source: result,
+		done:   done,
+	}
+}
+
+func (i *SubstateIterator) Release() {
+	close(i.done)
+
+	// drain pipeline until the result channel is closed
+	for open := true; open; _, open = <-i.source {
+	}
+
+	i.iter.Release()
+}
+
+func (i *SubstateIterator) Next() bool {
+	if i.iter == nil {
+		return false
+	}
+	i.cur = <-i.source
+	return i.cur != nil
+}
+
+func (i *SubstateIterator) Value() *Transaction {
+	return i.cur
+}
