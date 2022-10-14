@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	cli "gopkg.in/urfave/cli.v1"
+	cli "github.com/urfave/cli/v2"
 )
 
 var (
