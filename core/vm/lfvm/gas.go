@@ -104,7 +104,7 @@ func getStaticGasPriceInternal(op OpCode) uint64 {
 	case EXTCODESIZE:
 		return 700 // This seems to be different than documented on evm.codes (it should be 100)
 	case EXTCODECOPY:
-		return 100
+		return 700 // From EIP150 it is 700, was 20
 	case RETURNDATASIZE:
 		return 2
 	case RETURNDATACOPY:

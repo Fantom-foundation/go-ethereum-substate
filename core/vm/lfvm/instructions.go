@@ -23,6 +23,10 @@ func opStop(c *context) {
 
 func opRevert(c *context) {
 	//fmt.Printf("REVERT\n")
+	if c.stack.stack_ptr < 2 {
+		c.status = ERROR
+		return
+	}
 	c.result_offset = *c.stack.pop()
 	c.result_size = *c.stack.pop()
 	c.status = REVERTED
@@ -47,9 +51,6 @@ func checkJumpDest(c *context) {
 	if int(c.pc+1) >= len(c.code) || c.code[c.pc+1].opcode != JUMPDEST {
 		c.SignalError(vm.ErrInvalidJump)
 	}
-	// Skip the interpretation of the JUMPDEST instruction
-	c.pc++
-	c.UseGas(1)
 }
 
 func opJump(c *context) {
@@ -168,6 +169,10 @@ func opMstore(c *context) {
 }
 
 func opMstore8(c *context) {
+	if c.stack.stack_ptr < 2 {
+		c.status = ERROR
+		return
+	}
 	var addr = c.stack.pop()
 	var value = c.stack.pop()
 
@@ -186,7 +191,9 @@ func opMload(c *context) {
 	c.memory.EnsureCapacity(offset, 32, c)
 
 	//fmt.Printf("MLOAD [%v]\n", addr)
-	c.memory.CopyWord(offset, trg)
+	if c.status == RUNNING {
+		c.memory.CopyWord(offset, trg)
+	}
 }
 
 func opMsize(c *context) {
@@ -266,6 +273,9 @@ func opCallDataCopy(c *context) {
 	}
 
 	c.memory.EnsureCapacity(int(memOffset64), int(length64), c)
+	if c.status != RUNNING {
+		return
+	}
 	c.memory.Set(memOffset64, length64, getData(c.data, dataOffset64, length64))
 }
 
@@ -403,6 +413,10 @@ func opAdd(c *context) {
 }
 
 func opSub(c *context) {
+	if c.stack.stack_ptr < 2 {
+		c.status = ERROR
+		return
+	}
 	a := c.stack.pop()
 	b := c.stack.peek()
 	b.Sub(a, b)
@@ -415,6 +429,9 @@ func opMul(c *context) {
 }
 
 func opMulMod(c *context) {
+	if c.stack.stack_ptr < 3 {
+		return
+	}
 	a := c.stack.pop()
 	b := c.stack.pop()
 	n := c.stack.peek()
@@ -437,6 +454,13 @@ func opMod(c *context) {
 	a := c.stack.pop()
 	b := c.stack.peek()
 	b.Mod(a, b)
+}
+
+func opAddMod(c *context) {
+	a := c.stack.pop()
+	b := c.stack.pop()
+	n := c.stack.peek()
+	n.AddMod(a, b, n)
 }
 
 func opSMod(c *context) {
@@ -587,6 +611,9 @@ func opCodeCopy(c *context) {
 
 	codeCopy := getData(c.contract.Code, uint64CodeOffset, length.Uint64())
 	c.memory.EnsureCapacity(int(memOffset.Uint64()), int(length.Uint64()), c)
+	if c.status != RUNNING {
+		return
+	}
 	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 }
 
@@ -637,7 +664,7 @@ func opCreate(c *context) {
 	res, addr, returnGas, suberr := c.evm.Create(c.contract, input, gas, bigVal)
 
 	success := c.stack.pushEmpty()
-	if suberr != nil && suberr != vm.ErrCodeStoreOutOfGas {
+	if suberr != nil {
 		success.Clear()
 	} else {
 		success.SetBytes(addr.Bytes())
@@ -712,6 +739,10 @@ func getData(data []byte, start uint64, size uint64) []byte {
 }
 
 func opExtCodeCopy(c *context) {
+	if c.stack.stack_ptr < 4 {
+		c.status = ERROR
+		return
+	}
 	var (
 		stack      = c.stack
 		a          = stack.pop()
@@ -723,8 +754,16 @@ func opExtCodeCopy(c *context) {
 	if overflow {
 		uint64CodeOffset = 0xffffffffffffffff
 	}
+
+	// Charge for length of copied code
+	words := (length.Uint64() + 31) / 32
+	if !c.UseGas(3 * words) {
+		return
+	}
+
 	addr := common.Address(a.Bytes20())
 	codeCopy := getData(c.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	c.memory.EnsureCapacity(int(memOffset.Uint64()), int(length.Uint64()), c)
 	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 }
@@ -750,13 +789,6 @@ func opCall(c *context) {
 	}
 	base_gas := c.memory.ExpansionCosts(int(needed_memory_size))
 
-	// Consider value transfere fees for base costs
-	if !value.IsZero() {
-		base_gas += params.CallValueTransferGas
-	}
-
-	gas := callGas(c.contract.Gas, base_gas, provided_gas)
-
 	// We need to check the existence of the target account before removing
 	// the gas price for the other cost factors to make sure that the read
 	// in the state DB is always happening. This is the current EVM behaviour,
@@ -764,35 +796,41 @@ func opCall(c *context) {
 	toAddr := common.Address(addr.Bytes20())
 
 	// Charge for transfering value to a new address
-	if !value.IsZero() && !c.stateDB.Exist(toAddr) && !c.UseGas(params.CallNewAccountGas) {
+	if !value.IsZero() {
+		base_gas += params.CallValueTransferGas
+	}
+
+	// jD: if evm.chainRules.IsEIP158 according to GETH it is EIP158 since 2016
+	// !!!! but need to touch stateDB for the address to have it in the substate record key/value
+	//if !value.IsZero() && !c.stateDB.Exist(toAddr) {
+	if !value.IsZero() && c.stateDB.Empty(toAddr) {
+		base_gas += params.CallNewAccountGas
+	}
+
+	cost := callGas(c.contract.Gas, base_gas, provided_gas)
+
+	if !c.UseGas(base_gas + cost) {
 		return
 	}
 
-	// Charge value-transfere fees
-	if !value.IsZero() && !c.UseGas(params.CallValueTransferGas) {
-		return
-	}
-
-	if !c.UseGas(gas) {
-		return
-	}
-
-	// Get the arguments from the memory.
-	args := c.memory.GetSlice(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	// jd: first use static and dynamic gas cost and then resize the memory
+	// probably when out of gas is happening, then mem should not be resized
+	c.memory.EnsureCapacityWithoutGas(int(needed_memory_size), c)
 
 	var bigVal = big0
 	//TODO: use uint256.Int instead of converting with toBig()
 	// By using big0 here, we save an alloc for the most common case (non-ether-transferring contract calls),
 	// but it would make more sense to extend the usage of uint256.Int
 	if !value.IsZero() {
-		gas += params.CallStipend
+		cost += params.CallStipend
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := c.evm.Call(c.contract, toAddr, args, gas, bigVal)
+	// Get the arguments from the memory.
+	args := c.memory.GetSlice(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	ret, returnGas, err := c.evm.Call(c.contract, toAddr, args, cost, bigVal)
 
 	if err == nil || err == vm.ErrExecutionReverted {
-		c.memory.EnsureCapacity(int(retOffset.Uint64()), int(retSize.Uint64()), c)
 		c.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
@@ -820,9 +858,14 @@ func opStaticCall(c *context) {
 	}
 	base_gas := c.memory.ExpansionCosts(int(needed_memory_size))
 	gas := callGas(c.contract.Gas, base_gas, provided_gas)
-	if !c.UseGas(gas) {
+
+	if !c.UseGas(base_gas + gas) {
 		return
 	}
+
+	// first use static and dynamic gas cost and then resize the memory
+	// when out of gas is happening, then mem should not be resized
+	c.memory.EnsureCapacityWithoutGas(int(needed_memory_size), c)
 
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
@@ -831,7 +874,6 @@ func opStaticCall(c *context) {
 	ret, returnGas, err := c.evm.StaticCall(c.contract, toAddr, args, gas)
 
 	if err == nil || err == vm.ErrExecutionReverted {
-		c.memory.EnsureCapacity(int(retOffset.Uint64()), int(retSize.Uint64()), c)
 		c.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 

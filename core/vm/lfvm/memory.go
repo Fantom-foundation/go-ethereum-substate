@@ -47,6 +47,18 @@ func (m *Memory) EnsureCapacity(offset, size int, c *context) {
 	}
 }
 
+func (m *Memory) EnsureCapacityWithoutGas(size int, c *context) {
+	if size <= 0 {
+		return
+	}
+	if m.Len() < size {
+		size = toValidMemorySize(size)
+		fee := m.ExpansionCosts(size)
+		m.total_memory_cost += fee
+		m.store = append(m.store, make([]byte, size-m.Len())...)
+	}
+}
+
 func (m *Memory) Len() int {
 	return len(m.store)
 }

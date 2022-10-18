@@ -8,6 +8,7 @@ type EVMInterpreter struct {
 	with_super_instructions bool
 	with_shadow_evm         bool
 	with_statistics         bool
+	readOnly                bool
 }
 
 // Registers the long-form EVM as a possible interpreter implementation.
@@ -35,5 +36,12 @@ func (e *EVMInterpreter) Run(contract *vm.Contract, input []byte, readOnly bool)
 		panic(err)
 		//return nil, err
 	}
-	return Run(e.evm, e.cfg, contract, converted, input, readOnly, e.evm.StateDB, e.with_shadow_evm, e.with_statistics)
+
+	// Make sure the readOnly is only set if we aren't in readOnly yet.
+	// This also makes sure that the readOnly flag isn't removed for child calls.
+	if readOnly && !e.readOnly {
+		e.readOnly = true
+		defer func() { e.readOnly = false }()
+	}
+	return Run(e.evm, e.cfg, contract, converted, input, e.readOnly, e.evm.StateDB, e.with_shadow_evm, e.with_statistics)
 }

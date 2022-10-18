@@ -50,6 +50,7 @@ type context struct {
 	code     Code
 	data     []byte
 	callsize uint256.Int
+	readOnly bool
 
 	// Intermediate data
 	return_data []byte
@@ -81,6 +82,12 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 	if evm.Depth == 0 {
 		ClearShadowValues()
 	}
+
+	// Don't bother with the execution if there's no code.
+	if len(contract.Code) == 0 {
+		return nil, nil
+	}
+
 	// Increment the call depth which is restricted to 1024
 	evm.Depth++
 	defer func() { evm.Depth-- }()
@@ -118,6 +125,7 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		stateDB:     state,
 		callsize:    *uint256.NewInt(uint64(len(data))),
 		interpreter: shadow_interpreter,
+		readOnly:    readOnly,
 	}
 	defer func() {
 		ReturnStack(ctxt.stack)
@@ -168,6 +176,15 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 
 func run(c *context) {
 	for c.status == RUNNING {
+
+		if int(c.pc) >= len(c.code) {
+			opStop(c)
+			return
+		}
+
+		for c.code[c.pc].opcode == JUMP_TO {
+			step(c)
+		}
 		step(c)
 	}
 }
@@ -175,6 +192,12 @@ func run(c *context) {
 func runWithShadowInterpreter(c *context) {
 	count := 0
 	for c.status == RUNNING {
+
+		if int(c.pc) >= len(c.code) {
+			opStop(c)
+			return
+		}
+
 		for c.code[c.pc].opcode == JUMP_TO {
 			step(c)
 		}
@@ -355,9 +378,15 @@ func runWithStatistics(c *context) {
 }
 
 func step(c *context) {
-	// TODO: remove this implicit stop at the end of a code section
-	if int(c.pc) >= len(c.code) {
-		opStop(c)
+
+	// If the interpreter is operating in readonly mode, make sure no
+	// state-modifying operation is performed. The 3rd stack item
+	// for a call operation is the value. Transferring value from one
+	// account to the others means the state is modified and should also
+	// return with an error.
+	if c.readOnly && (isWriteInstruction(c.code[c.pc].opcode) || (c.code[c.pc].opcode == CALL && c.stack.Back(2).Sign() != 0)) {
+		c.err = vm.ErrWriteProtection
+		c.status = ERROR
 		return
 	}
 	//fmt.Printf("%v\n", c.stack)
@@ -430,6 +459,8 @@ func step(c *context) {
 		opMod(c)
 	case SMOD:
 		opSMod(c)
+	case ADDMOD:
+		opAddMod(c)
 	case EXP:
 		opExp(c)
 	case DUP5:
@@ -705,4 +736,15 @@ func getGasPrice(c *context) uint64 {
 	// Idea: handle static gas price in static dispatch above (saves an array lookup)
 	op := c.code[c.pc].opcode
 	return getStaticGasPrice(op)
+}
+
+var writeIns = []OpCode{SSTORE, LOG0, LOG1, LOG2, LOG3, LOG4, CREATE, CREATE2, SELFDESTRUCT}
+
+func isWriteInstruction(opCode OpCode) bool {
+	for _, ins := range writeIns {
+		if ins == opCode {
+			return true
+		}
+	}
+	return false
 }
