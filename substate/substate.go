@@ -69,6 +69,24 @@ func (sa *SubstateAccount) CodeHash() common.Hash {
 
 type SubstateAlloc map[common.Address]*SubstateAccount
 
+func (x SubstateAlloc) Merge(y SubstateAlloc) {
+	for addr, account := range y { 
+		if _, found := x[addr]; found {
+			// overwrite account details in x by y
+			x[addr].Nonce = account.Nonce
+			x[addr].Balance = new(big.Int).Set(account.Balance)
+			copy(x[addr].Code, account.Code)
+		} else {
+			// create new account details in x
+			x[addr] = NewSubstateAccount(account.Nonce, account.Balance, account.Code)
+		}
+		// update storage by y
+		for key, value := range account.Storage {
+			x[addr].Storage[key] = value
+		}
+	} 
+}
+
 func (x SubstateAlloc) Equal(y SubstateAlloc) bool {
 	if len(x) != len(y) {
 		return false
