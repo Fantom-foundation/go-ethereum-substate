@@ -13,26 +13,42 @@ type cache_key struct {
 	contract_length int
 }
 
-var mu = sync.Mutex{}
-var cache = map[cache_key]Code{}
+type cache_val struct {
+	oldCode []byte
+	code    Code
+}
 
-func Convert(addr common.Address, code []byte, with_super_instructions bool) (Code, error) {
+var mu = sync.Mutex{}
+var cache = map[cache_key]cache_val{}
+
+func Convert(addr common.Address, code []byte, with_super_instructions bool, blk uint64) (Code, error) {
 	key := cache_key{addr, len(code)}
 	mu.Lock()
 	res, exists := cache[key]
 	if exists {
-		mu.Unlock()
-		return res, nil
+		isEqual := true
+		for i, v := range res.oldCode {
+			if v != code[i] {
+				fmt.Println("Different code for address: ", addr.String(), " blk: ", blk)
+				isEqual = false
+				break
+			}
+		}
+
+		if isEqual {
+			mu.Unlock()
+			return res.code, nil
+		}
 	}
 	mu.Unlock()
-	res, error := convert(code, with_super_instructions)
+	resCode, error := convert(code, with_super_instructions)
 	if error != nil {
 		return nil, error
 	}
 	mu.Lock()
-	cache[key] = res
+	cache[key] = cache_val{oldCode: code, code: resCode}
 	mu.Unlock()
-	return res, nil
+	return resCode, nil
 }
 
 func convert(code []byte, with_super_instructions bool) (Code, error) {

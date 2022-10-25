@@ -1,6 +1,8 @@
 package lfvm
 
-import "github.com/ethereum/go-ethereum/core/vm"
+import (
+	"github.com/ethereum/go-ethereum/core/vm"
+)
 
 type EVMInterpreter struct {
 	evm                     *vm.EVM
@@ -31,7 +33,7 @@ func init() {
 }
 
 func (e *EVMInterpreter) Run(contract *vm.Contract, input []byte, readOnly bool) (ret []byte, err error) {
-	converted, err := Convert(contract.Address(), contract.Code, e.with_super_instructions)
+	converted, err := Convert(contract.Address(), contract.Code, e.with_super_instructions, e.evm.Context.BlockNumber.Uint64())
 	if err != nil {
 		panic(err)
 		//return nil, err

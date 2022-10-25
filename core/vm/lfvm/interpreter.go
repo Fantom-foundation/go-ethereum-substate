@@ -146,8 +146,8 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		offset := ctxt.result_offset.Uint64()
 		size := ctxt.result_size.Uint64()
 		res = make([]byte, size)
-		ctxt.memory.EnsureCapacity(int(offset), int(size), &ctxt)
-		ctxt.memory.CopyData(int(offset), res[:])
+		ctxt.memory.EnsureCapacity(offset, size, &ctxt)
+		ctxt.memory.CopyData(offset, res[:])
 	}
 
 	// Handle return status
@@ -236,7 +236,7 @@ func runWithShadowInterpreter(c *context) {
 			fmt.Printf("Right: %v\n", *c.interpreter.Stack.Back(0))
 			panic("Stack top value divereged!")
 		}
-		if c.memory.Len() != c.interpreter.Memory.Len() {
+		if c.memory.Len() != uint(c.interpreter.Memory.Len()) {
 			fmt.Printf("Left:  %v\n", c.memory.Len())
 			fmt.Printf("Right: %v\n", c.interpreter.Memory.Len())
 			panic("Memory size divereged!")
