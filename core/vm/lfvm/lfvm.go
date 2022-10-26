@@ -33,7 +33,7 @@ func init() {
 }
 
 func (e *EVMInterpreter) Run(contract *vm.Contract, input []byte, readOnly bool) (ret []byte, err error) {
-	converted, err := Convert(contract.Address(), contract.Code, e.with_super_instructions, e.evm.Context.BlockNumber.Uint64())
+	converted, err := Convert(*contract.CodeAddr, contract.Code, e.with_super_instructions, e.evm.Context.BlockNumber.Uint64())
 	if err != nil {
 		panic(err)
 		//return nil, err

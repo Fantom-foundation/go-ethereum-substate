@@ -26,19 +26,9 @@ func Convert(addr common.Address, code []byte, with_super_instructions bool, blk
 	mu.Lock()
 	res, exists := cache[key]
 	if exists {
-		isEqual := true
-		for i, v := range res.oldCode {
-			if v != code[i] {
-				fmt.Println("Different code for address: ", addr.String(), " blk: ", blk)
-				isEqual = false
-				break
-			}
-		}
 
-		if isEqual {
-			mu.Unlock()
-			return res.code, nil
-		}
+		mu.Unlock()
+		return res.code, nil
 	}
 	mu.Unlock()
 	resCode, error := convert(code, with_super_instructions)
