@@ -737,6 +737,9 @@ func (srv *Server) run() {
 	for _, n := range srv.TrustedNodes {
 		trusted[n.ID()] = true
 	}
+	for _, n := range srv.PrivateNodes {
+		trusted[n.ID()] = true
+	}
 
 running:
 	for {
