@@ -18,26 +18,46 @@ type cache_val struct {
 	code    Code
 }
 
+var changedAddress01 = common.HexToAddress("0xA7CC236F81b04c1058e9bfb70E0Ee9940e271676")
+var changedAddress02 = common.HexToAddress("0xAD0FB83a110c3694faDa81e8B396716a610c4030")
+var changedAddress03 = common.HexToAddress("0xA8B3C9f298877dD93F30E8Ed359956faE10E8797")
+
 var mu = sync.Mutex{}
 var cache = map[cache_key]cache_val{}
 
-func Convert(addr common.Address, code []byte, with_super_instructions bool, blk uint64) (Code, error) {
+func Convert(addr common.Address, code []byte, with_super_instructions bool, blk uint64, create bool) (Code, error) {
 	key := cache_key{addr, len(code)}
 	mu.Lock()
 	res, exists := cache[key]
-	if exists {
+	if exists && !create {
+		isEqual := true
+		if addr == changedAddress01 || addr == changedAddress02 || addr == changedAddress03 {
+			// fmt.Println("Address: ", addr.String(), " blk: ", blk)
 
-		mu.Unlock()
-		return res.code, nil
+			for i, v := range res.oldCode {
+				if v != code[i] {
+					fmt.Println("Different code for address: ", addr.String(), " blk: ", blk)
+					isEqual = false
+					break
+				}
+			}
+		}
+
+		if isEqual {
+			mu.Unlock()
+			return res.code, nil
+		}
 	}
 	mu.Unlock()
 	resCode, error := convert(code, with_super_instructions)
 	if error != nil {
 		return nil, error
 	}
-	mu.Lock()
-	cache[key] = cache_val{oldCode: code, code: resCode}
-	mu.Unlock()
+	if !create {
+		mu.Lock()
+		cache[key] = cache_val{oldCode: code, code: resCode}
+		mu.Unlock()
+	}
 	return resCode, nil
 }
 
