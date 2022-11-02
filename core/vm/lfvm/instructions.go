@@ -55,6 +55,11 @@ func checkJumpDest(c *context) {
 
 func opJump(c *context) {
 	destination := c.stack.pop()
+	// overflow check
+	if int32(destination.Uint64())-1 < 0 {
+		c.status = ERROR
+		return
+	}
 	// Update the PC to the jump destination -1 since interpreter will increase PC by 1 afterward.
 	c.pc = int32(destination.Uint64()) - 1
 	checkJumpDest(c)
@@ -229,9 +234,15 @@ func opSstore(c *context) {
 		c.status = ERROR
 		return
 	}
+	gasfunc := gasSStore
+	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+		gasfunc = gasSStoreEIP2929
+	}
+
 	// Charge the gas price for this operation
-	price, err := gasSStore(c)
+	price, err := gasfunc(c)
 	if err != nil || !c.UseGas(price) {
+		c.status = OUT_OF_GAS
 		return
 	}
 
@@ -244,6 +255,27 @@ func opSstore(c *context) {
 
 func opSload(c *context) {
 	var top = c.stack.peek()
+
+	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+		slot := common.Hash(top.Bytes32())
+		// Check slot presence in the access list
+		if _, slotPresent := c.evm.StateDB.SlotInAccessList(c.contract.Address(), slot); !slotPresent {
+			// If the caller cannot afford the cost, this change will be rolled back
+			// If he does afford it, we can skip checking the same thing later on, during execution
+			if c.interpreter == nil {
+				c.evm.StateDB.AddSlotToAccessList(c.contract.Address(), slot)
+			}
+			if !c.UseGas(params.ColdSloadCostEIP2929) {
+				c.status = OUT_OF_GAS
+				return
+			}
+		} else {
+			if !c.UseGas(params.WarmStorageReadCostEIP2929) {
+				c.status = OUT_OF_GAS
+				return
+			}
+		}
+	}
 	top.SetBytes32(c.stateDB.GetState(c.contract.Address(), top.Bytes32()).Bytes())
 }
 
@@ -588,6 +620,11 @@ func opGasPrice(c *context) {
 func opBalance(c *context) {
 	slot := c.stack.peek()
 	address := common.Address(slot.Bytes20())
+	err := gasEip2929AccountCheck(c, address)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
 	slot.SetFromBig(c.evm.StateDB.GetBalance(address))
 }
 
@@ -595,13 +632,23 @@ func opSelfbalance(c *context) {
 	c.stack.pushEmpty().SetFromBig(c.evm.StateDB.GetBalance(c.contract.Address()))
 }
 
+func opBaseFee(c *context) {
+	baseFee, _ := uint256.FromBig(c.evm.Context.BaseFee)
+	c.stack.push(baseFee)
+}
+
 func opSelfdestruct(c *context) {
 	if c.stack.stack_ptr < 1 {
 		c.status = ERROR
 		return
 	}
+	gasfunc := gasSelfdestruct
+	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+		gasfunc = gasSelfdestructEIP2929
+	}
 	// even death is not for free
-	if !c.UseGas(gasSelfdestruct(c)) {
+	if !c.UseGas(gasfunc(c)) {
+		c.status = OUT_OF_GAS
 		return
 	}
 	beneficiary := c.stack.pop()
@@ -677,22 +724,22 @@ func opCodeCopy(c *context) {
 func opExtcodesize(c *context) {
 	top := c.stack.peek()
 	addr := top.Bytes20()
+	err := gasEip2929AccountCheck(c, addr)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
 	top.SetUint64(uint64(c.stateDB.GetCodeSize(addr)))
-	// Charge extra for cold locations.
-	/*
-		if !c.evm.StateDB.AddressInAccessList(addr) {
-			fmt.Printf("Reducing gas from %v to %v\n", c.contract.Gas, c.contract.Gas-2500)
-			c.contract.Gas -= 2500
-				if c.interpreter == nil {
-					c.evm.StateDB.AddAddressToAccessList(addr)
-				}
-		}
-	*/
 }
 
 func opExtcodehash(c *context) {
 	slot := c.stack.peek()
 	address := common.Address(slot.Bytes20())
+	err := gasEip2929AccountCheck(c, address)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
 	if c.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
@@ -819,6 +866,11 @@ func opExtCodeCopy(c *context) {
 	}
 
 	addr := common.Address(a.Bytes20())
+	err := gasEip2929AccountCheck(c, addr)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
 	codeCopy := getData(c.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
 	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
 	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
@@ -835,6 +887,12 @@ func neededMemorySize(offset, size *uint256.Int) uint64 {
 func opCall(c *context) {
 	if c.stack.stack_ptr < 7 {
 		c.status = ERROR
+		return
+	}
+
+	warmAccess, coldCost, err := addressInAccessList(c)
+	if err != nil {
+		c.status = OUT_OF_GAS
 		return
 	}
 	stack := c.stack
@@ -861,21 +919,33 @@ func opCall(c *context) {
 		base_gas += params.CallValueTransferGas
 	}
 
-	// jD: if evm.chainRules.IsEIP158 according to GETH it is EIP158 since 2016
+	// if evm.chainRules.IsEIP158 according to GETH it is EIP158 since 2016
 	// !!!! but need to touch stateDB for the address to have it in the substate record key/value
-	//if !value.IsZero() && !c.stateDB.Exist(toAddr) {
-	if !value.IsZero() && c.stateDB.Empty(toAddr) {
+	if !value.IsZero() && !c.stateDB.Exist(toAddr) {
 		base_gas += params.CallNewAccountGas
 	}
 
 	cost := callGas(c.contract.Gas, base_gas, provided_gas)
 
-	if !c.UseGas(base_gas + cost) {
-		return
+	if warmAccess {
+		if !c.UseGas(base_gas + cost) {
+			c.status = OUT_OF_GAS
+			return
+		}
+	} else {
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		c.contract.Gas += coldCost
+		if !c.UseGas(base_gas + cost + coldCost) {
+			c.status = OUT_OF_GAS
+			return
+		}
 	}
 
-	// jd: first use static and dynamic gas cost and then resize the memory
-	// probably when out of gas is happening, then mem should not be resized
+	// first use static and dynamic gas cost and then resize the memory
+	// when out of gas is happening, then mem should not be resized
 	c.memory.EnsureCapacityWithoutGas(needed_memory_size, c)
 
 	var bigVal = big0
@@ -907,6 +977,13 @@ func opCall(c *context) {
 
 func opStaticCall(c *context) {
 	stack := c.stack
+
+	warmAccess, coldCost, err := addressInAccessList(c)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
+
 	// Pop call parameters.
 	provided_gas, addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
@@ -920,8 +997,21 @@ func opStaticCall(c *context) {
 	base_gas := c.memory.ExpansionCosts(needed_memory_size)
 	gas := callGas(c.contract.Gas, base_gas, provided_gas)
 
-	if !c.UseGas(base_gas + gas) {
-		return
+	if warmAccess {
+		if !c.UseGas(base_gas + gas) {
+			c.status = OUT_OF_GAS
+			return
+		}
+	} else {
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		c.contract.Gas += coldCost
+		if !c.UseGas(base_gas + gas + coldCost) {
+			c.status = OUT_OF_GAS
+			return
+		}
 	}
 
 	// first use static and dynamic gas cost and then resize the memory
@@ -953,6 +1043,11 @@ func opDelegateCall(c *context) {
 		c.status = ERROR
 		return
 	}
+	warmAccess, coldCost, err := addressInAccessList(c)
+	if err != nil {
+		c.status = OUT_OF_GAS
+		return
+	}
 	stack := c.stack
 	// Pop call parameters.
 	provided_gas, addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
@@ -966,8 +1061,22 @@ func opDelegateCall(c *context) {
 	}
 	base_gas := c.memory.ExpansionCosts(needed_memory_size)
 	gas := callGas(c.contract.Gas, base_gas, provided_gas)
-	if !c.UseGas(gas) {
-		return
+
+	if warmAccess {
+		if !c.UseGas(gas) {
+			c.status = OUT_OF_GAS
+			return
+		}
+	} else {
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		c.contract.Gas += coldCost
+		if !c.UseGas(gas + coldCost) {
+			c.status = OUT_OF_GAS
+			return
+		}
 	}
 
 	toAddr := common.Address(addr.Bytes20())

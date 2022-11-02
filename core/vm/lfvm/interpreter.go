@@ -635,6 +635,8 @@ func step(c *context) {
 		opBalance(c)
 	case SELFBALANCE:
 		opSelfbalance(c)
+	case BASEFEE:
+		opBaseFee(c)
 	case SELFDESTRUCT:
 		opSelfdestruct(c)
 	case CHAINID:
@@ -735,7 +737,7 @@ func step(c *context) {
 func getGasPrice(c *context) uint64 {
 	// Idea: handle static gas price in static dispatch above (saves an array lookup)
 	op := c.code[c.pc].opcode
-	return getStaticGasPrice(op)
+	return getStaticGasPrice(op, c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber))
 }
 
 var writeIns = []OpCode{SSTORE, LOG0, LOG1, LOG2, LOG3, LOG4, CREATE, CREATE2, SELFDESTRUCT}
