@@ -23,7 +23,7 @@ func opStop(c *context) {
 
 func opRevert(c *context) {
 	//fmt.Printf("REVERT\n")
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -162,7 +162,7 @@ func opPush32(c *context) {
 
 func opDup(c *context, pos int) {
 	//fmt.Printf("DUP%d\n", pos)
-	if c.stack.stack_ptr < pos || c.stack.full() {
+	if c.stack.len() < pos || c.stack.full() {
 		c.status = ERROR
 		return
 	}
@@ -171,7 +171,7 @@ func opDup(c *context, pos int) {
 
 func opSwap(c *context, pos int) {
 	//fmt.Printf("SWAP%d\n", pos)
-	if c.stack.stack_ptr < pos {
+	if c.stack.len() < pos {
 		c.status = ERROR
 		return
 	}
@@ -194,7 +194,7 @@ func opMstore(c *context) {
 }
 
 func opMstore8(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -230,7 +230,7 @@ func opMsize(c *context) {
 }
 
 func opSstore(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -317,7 +317,7 @@ func opCallDataload(c *context) {
 }
 
 func opCallDataCopy(c *context) {
-	if c.stack.stack_ptr < 3 {
+	if c.stack.len() < 3 {
 		c.status = ERROR
 		return
 	}
@@ -348,7 +348,7 @@ func opCallDataCopy(c *context) {
 }
 
 func opAnd(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -359,7 +359,7 @@ func opAnd(c *context) {
 }
 
 func opOr(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -376,7 +376,7 @@ func opNot(c *context) {
 }
 
 func opXor(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -493,7 +493,7 @@ func opAdd(c *context) {
 }
 
 func opSub(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -509,7 +509,7 @@ func opMul(c *context) {
 }
 
 func opMulMod(c *context) {
-	if c.stack.stack_ptr < 3 {
+	if c.stack.len() < 3 {
 		c.status = ERROR
 		return
 	}
@@ -551,7 +551,7 @@ func opSMod(c *context) {
 }
 
 func opExp(c *context) {
-	if c.stack.stack_ptr < 2 {
+	if c.stack.len() < 2 {
 		c.status = ERROR
 		return
 	}
@@ -638,7 +638,7 @@ func opBaseFee(c *context) {
 }
 
 func opSelfdestruct(c *context) {
-	if c.stack.stack_ptr < 1 {
+	if c.stack.len() < 1 {
 		c.status = ERROR
 		return
 	}
@@ -843,7 +843,7 @@ func getData(data []byte, start uint64, size uint64) []byte {
 }
 
 func opExtCodeCopy(c *context) {
-	if c.stack.stack_ptr < 4 {
+	if c.stack.len() < 4 {
 		c.status = ERROR
 		return
 	}
@@ -885,7 +885,7 @@ func neededMemorySize(offset, size *uint256.Int) uint64 {
 }
 
 func opCall(c *context) {
-	if c.stack.stack_ptr < 7 {
+	if c.stack.len() < 7 {
 		c.status = ERROR
 		return
 	}
@@ -1039,7 +1039,7 @@ func opStaticCall(c *context) {
 }
 
 func opDelegateCall(c *context) {
-	if c.stack.stack_ptr < 6 {
+	if c.stack.len() < 6 {
 		c.status = ERROR
 		return
 	}
