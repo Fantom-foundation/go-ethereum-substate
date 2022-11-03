@@ -388,6 +388,7 @@ func gasSStoreEIP2929(c *context) (uint64, error) {
 
 	// If we fail the minimum gas availability invariant, fail (0)
 	if c.contract.Gas <= params.SstoreSentryGasEIP2200 {
+		c.status = OUT_OF_GAS
 		return 0, errors.New("not enough gas for reentrancy sentry")
 	}
 	// Gas sentry honoured, do the actual gas calculation based on the stored value
@@ -490,6 +491,7 @@ func addressInAccessList(c *context) (warmAccess bool, coldCost uint64, err erro
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
 			if !c.contract.UseGas(coldCost) {
+				c.status = OUT_OF_GAS
 				return false, 0, vm.ErrOutOfGas
 			}
 		}

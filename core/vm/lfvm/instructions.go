@@ -242,7 +242,6 @@ func opSstore(c *context) {
 	// Charge the gas price for this operation
 	price, err := gasfunc(c)
 	if err != nil || !c.UseGas(price) {
-		c.status = OUT_OF_GAS
 		return
 	}
 
@@ -266,12 +265,10 @@ func opSload(c *context) {
 				c.evm.StateDB.AddSlotToAccessList(c.contract.Address(), slot)
 			}
 			if !c.UseGas(params.ColdSloadCostEIP2929) {
-				c.status = OUT_OF_GAS
 				return
 			}
 		} else {
 			if !c.UseGas(params.WarmStorageReadCostEIP2929) {
-				c.status = OUT_OF_GAS
 				return
 			}
 		}
@@ -622,7 +619,6 @@ func opBalance(c *context) {
 	address := common.Address(slot.Bytes20())
 	err := gasEip2929AccountCheck(c, address)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	slot.SetFromBig(c.evm.StateDB.GetBalance(address))
@@ -648,7 +644,6 @@ func opSelfdestruct(c *context) {
 	}
 	// even death is not for free
 	if !c.UseGas(gasfunc(c)) {
-		c.status = OUT_OF_GAS
 		return
 	}
 	beneficiary := c.stack.pop()
@@ -726,7 +721,6 @@ func opExtcodesize(c *context) {
 	addr := top.Bytes20()
 	err := gasEip2929AccountCheck(c, addr)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	top.SetUint64(uint64(c.stateDB.GetCodeSize(addr)))
@@ -737,7 +731,6 @@ func opExtcodehash(c *context) {
 	address := common.Address(slot.Bytes20())
 	err := gasEip2929AccountCheck(c, address)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	if c.evm.StateDB.Empty(address) {
@@ -868,7 +861,6 @@ func opExtCodeCopy(c *context) {
 	addr := common.Address(a.Bytes20())
 	err := gasEip2929AccountCheck(c, addr)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	codeCopy := getData(c.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
@@ -892,7 +884,6 @@ func opCall(c *context) {
 
 	warmAccess, coldCost, err := addressInAccessList(c)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	stack := c.stack
@@ -929,7 +920,6 @@ func opCall(c *context) {
 
 	if warmAccess {
 		if !c.UseGas(base_gas + cost) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	} else {
@@ -939,7 +929,6 @@ func opCall(c *context) {
 		// also become correctly reported to tracers.
 		c.contract.Gas += coldCost
 		if !c.UseGas(base_gas + cost + coldCost) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	}
@@ -980,7 +969,6 @@ func opStaticCall(c *context) {
 
 	warmAccess, coldCost, err := addressInAccessList(c)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 
@@ -999,7 +987,6 @@ func opStaticCall(c *context) {
 
 	if warmAccess {
 		if !c.UseGas(base_gas + gas) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	} else {
@@ -1009,7 +996,6 @@ func opStaticCall(c *context) {
 		// also become correctly reported to tracers.
 		c.contract.Gas += coldCost
 		if !c.UseGas(base_gas + gas + coldCost) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	}
@@ -1045,7 +1031,6 @@ func opDelegateCall(c *context) {
 	}
 	warmAccess, coldCost, err := addressInAccessList(c)
 	if err != nil {
-		c.status = OUT_OF_GAS
 		return
 	}
 	stack := c.stack
@@ -1064,7 +1049,6 @@ func opDelegateCall(c *context) {
 
 	if warmAccess {
 		if !c.UseGas(gas) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	} else {
@@ -1074,7 +1058,6 @@ func opDelegateCall(c *context) {
 		// also become correctly reported to tracers.
 		c.contract.Gas += coldCost
 		if !c.UseGas(gas + coldCost) {
-			c.status = OUT_OF_GAS
 			return
 		}
 	}
