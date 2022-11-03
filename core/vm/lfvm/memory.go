@@ -21,7 +21,7 @@ func toValidMemorySize(size uint64) uint64 {
 }
 
 func (m *Memory) ExpansionCosts(size uint64) uint64 {
-	if uint64(m.Len()) >= size {
+	if m.Len() >= size {
 		return 0
 	}
 	size = toValidMemorySize(size)
@@ -36,14 +36,14 @@ func (m *Memory) EnsureCapacity(offset, size uint64, c *context) {
 		return
 	}
 	needed := offset + size
-	if uint64(m.Len()) < needed {
+	if m.Len() < needed {
 		needed = toValidMemorySize(needed)
 		fee := m.ExpansionCosts(needed)
 		if !c.UseGas(fee) {
 			return
 		}
 		m.total_memory_cost += fee
-		m.store = append(m.store, make([]byte, needed-uint64(m.Len()))...)
+		m.store = append(m.store, make([]byte, needed-m.Len())...)
 	}
 }
 
@@ -51,27 +51,27 @@ func (m *Memory) EnsureCapacityWithoutGas(size uint64, c *context) {
 	if size <= 0 {
 		return
 	}
-	if uint64(m.Len()) < size {
+	if m.Len() < size {
 		size = toValidMemorySize(size)
 		fee := m.ExpansionCosts(size)
 		m.total_memory_cost += fee
-		m.store = append(m.store, make([]byte, size-uint64(m.Len()))...)
+		m.store = append(m.store, make([]byte, size-m.Len())...)
 	}
 }
 
-func (m *Memory) Len() uint {
-	return uint(len(m.store))
+func (m *Memory) Len() uint64 {
+	return uint64(len(m.store))
 }
 
 func (m *Memory) SetByte(offset uint64, value byte) {
-	if uint64(m.Len()) < offset+1 {
+	if m.Len() < offset+1 {
 		panic(fmt.Sprintf("memory to small, size %d, attempted to write at position %d", m.Len(), offset))
 	}
 	m.store[offset] = value
 }
 
 func (m *Memory) SetWord(offset uint64, value *uint256.Int) {
-	if uint64(m.Len()) < offset+32 {
+	if m.Len() < offset+32 {
 		panic(fmt.Sprintf("memory to small, size %d, attempted to write 32 byte at position %d", m.Len(), offset))
 	}
 
@@ -116,15 +116,15 @@ func (m *Memory) SetWord(offset uint64, value *uint256.Int) {
 
 func (m *Memory) Set(offset, size uint64, value []byte) {
 	if size > 0 {
-		if offset+size > uint64(len(m.store)) {
-			panic(fmt.Sprintf("memory to small, size %d, attempted to write %d bytes at %d", len(m.store), size, offset))
+		if offset+size > m.Len() {
+			panic(fmt.Sprintf("memory to small, size %d, attempted to write %d bytes at %d", m.Len(), size, offset))
 		}
 		copy(m.store[offset:offset+size], value)
 	}
 }
 
 func (m *Memory) CopyWord(offset uint64, trg *uint256.Int) {
-	if uint64(m.Len()) < offset+32 {
+	if m.Len() < offset+32 {
 		panic(fmt.Sprintf("memory to small, size %d, attempted to read 32 byte at position %d", m.Len(), offset))
 	}
 	trg.SetBytes32(m.store[offset : offset+32])
@@ -132,7 +132,7 @@ func (m *Memory) CopyWord(offset uint64, trg *uint256.Int) {
 
 // Copies data from the memory to the given slice.
 func (m *Memory) CopyData(offset uint64, trg []byte) {
-	if uint64(m.Len()) < offset {
+	if m.Len() < offset {
 		copy(trg, make([]byte, len(trg)))
 		return
 	}
@@ -146,12 +146,12 @@ func (m *Memory) CopyData(offset uint64, trg []byte) {
 	}
 }
 
-func (m *Memory) GetSlice(offset, size int64) []byte {
+func (m *Memory) GetSlice(offset, size uint64) []byte {
 	if size == 0 {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
+	if m.Len() > offset {
 		return m.store[offset : offset+size]
 	}
 

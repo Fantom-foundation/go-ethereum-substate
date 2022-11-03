@@ -566,7 +566,7 @@ func opSha3(c *context) {
 	offset, size := c.stack.pop(), c.stack.peek()
 
 	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
-	data := c.memory.GetSlice(int64(offset.Uint64()), int64(size.Uint64()))
+	data := c.memory.GetSlice(offset.Uint64(), size.Uint64())
 
 	// charge dynamic gas price
 	minimum_word_size := uint64((size.Uint64() + 31) / 32)
@@ -751,7 +751,7 @@ func opCreate(c *context) {
 	var (
 		value        = c.stack.pop()
 		offset, size = c.stack.pop(), c.stack.pop()
-		input        = c.memory.GetSlice(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = c.memory.GetSlice(offset.Uint64(), size.Uint64())
 		gas          = c.contract.Gas
 	)
 	if true /*c.evm.chainRules.IsEIP150*/ {
@@ -791,7 +791,7 @@ func opCreate2(c *context) {
 
 	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
 
-	input := c.memory.GetSlice(int64(offset.Uint64()), int64(size.Uint64()))
+	input := c.memory.GetSlice(offset.Uint64(), size.Uint64())
 
 	// Charge for the code size
 	words := (size.Uint64() + 31) / 32
@@ -958,7 +958,7 @@ func opCall(c *context) {
 	}
 
 	// Get the arguments from the memory.
-	args := c.memory.GetSlice(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := c.memory.GetSlice(inOffset.Uint64(), inSize.Uint64())
 	ret, returnGas, err := c.evm.Call(c.contract, toAddr, args, cost, bigVal)
 
 	if err == nil || err == vm.ErrExecutionReverted {
@@ -1020,7 +1020,7 @@ func opStaticCall(c *context) {
 
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := c.memory.GetSlice(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := c.memory.GetSlice(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := c.evm.StaticCall(c.contract, toAddr, args, gas)
 
@@ -1081,7 +1081,7 @@ func opDelegateCall(c *context) {
 
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := c.memory.GetSlice(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := c.memory.GetSlice(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := c.evm.DelegateCall(c.contract, toAddr, args, gas)
 
@@ -1156,7 +1156,7 @@ func opLog(c *context, size int) {
 	if c.status != RUNNING {
 		return
 	}
-	d := c.memory.GetSlice(int64(start), int64(log_size))
+	d := c.memory.GetSlice(start, log_size)
 
 	// make a copy of the data to disconnect from memory
 	log_data := common.CopyBytes(d)
