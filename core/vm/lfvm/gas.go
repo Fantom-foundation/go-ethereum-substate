@@ -457,7 +457,7 @@ func gasSStoreEIP2929(c *context) (uint64, error) {
 }
 
 func gasEip2929AccountCheck(c *context, address common.Address) error {
-	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+	if c.isBerlin {
 		// Charge extra for cold locations.
 
 		if !c.evm.StateDB.AddressInAccessList(address) {
@@ -476,7 +476,7 @@ func gasEip2929AccountCheck(c *context, address common.Address) error {
 
 func addressInAccessList(c *context) (warmAccess bool, coldCost uint64, err error) {
 	warmAccess = true
-	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+	if c.isBerlin {
 		addr := common.Address(c.stack.Back(1).Bytes20())
 		// Check slot presence in the access list
 		warmAccess = c.evm.StateDB.AddressInAccessList(addr)

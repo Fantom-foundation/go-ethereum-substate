@@ -38,12 +38,13 @@ type context struct {
 	evm *vm.EVM
 
 	// Execution state
-	pc      int32
-	stack   *Stack
-	memory  *Memory
-	stateDB vm.StateDB
-	status  Status
-	err     error
+	pc       int32
+	stack    *Stack
+	memory   *Memory
+	stateDB  vm.StateDB
+	status   Status
+	err      error
+	isBerlin bool
 
 	// Inputs
 	contract *vm.Contract
@@ -126,6 +127,7 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		callsize:    *uint256.NewInt(uint64(len(data))),
 		interpreter: shadow_interpreter,
 		readOnly:    readOnly,
+		isBerlin:    evm.ChainConfig().IsBerlin(evm.Context.BlockNumber),
 	}
 	defer func() {
 		ReturnStack(ctxt.stack)
@@ -379,12 +381,13 @@ func runWithStatistics(c *context) {
 
 func step(c *context) {
 
+	op := c.code[c.pc].opcode
 	// If the interpreter is operating in readonly mode, make sure no
 	// state-modifying operation is performed. The 3rd stack item
 	// for a call operation is the value. Transferring value from one
 	// account to the others means the state is modified and should also
 	// return with an error.
-	if c.readOnly && (isWriteInstruction(c.code[c.pc].opcode) || (c.code[c.pc].opcode == CALL && c.stack.Back(2).Sign() != 0)) {
+	if c.readOnly && (isWriteInstruction(op) || (op == CALL && c.stack.Back(2).Sign() != 0)) {
 		c.err = vm.ErrWriteProtection
 		c.status = ERROR
 		return
@@ -396,7 +399,7 @@ func step(c *context) {
 		return
 	}
 	// Execute instruction
-	switch c.code[c.pc].opcode {
+	switch op {
 	case POP:
 		opPop(c)
 	case PUSH1:
@@ -729,7 +732,7 @@ func step(c *context) {
 	case PUSH1_PUSH1_PUSH1_SHL_SUB:
 		opPush1_Push1_Push1_Shl_Sub(c)
 	default:
-		panic(fmt.Sprintf("Unsupported operation: %v", c.code[c.pc].opcode))
+		panic(fmt.Sprintf("Unsupported operation: %v", op))
 	}
 	c.pc++
 }
@@ -737,7 +740,7 @@ func step(c *context) {
 func getGasPrice(c *context) uint64 {
 	// Idea: handle static gas price in static dispatch above (saves an array lookup)
 	op := c.code[c.pc].opcode
-	return getStaticGasPrice(op, c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber))
+	return getStaticGasPrice(op, c.isBerlin)
 }
 
 var writeIns = []OpCode{SSTORE, LOG0, LOG1, LOG2, LOG3, LOG4, CREATE, CREATE2, SELFDESTRUCT}

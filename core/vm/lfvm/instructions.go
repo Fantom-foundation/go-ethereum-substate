@@ -235,7 +235,7 @@ func opSstore(c *context) {
 		return
 	}
 	gasfunc := gasSStore
-	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+	if c.isBerlin {
 		gasfunc = gasSStoreEIP2929
 	}
 
@@ -256,7 +256,7 @@ func opSstore(c *context) {
 func opSload(c *context) {
 	var top = c.stack.peek()
 
-	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+	if c.isBerlin {
 		slot := common.Hash(top.Bytes32())
 		// Check slot presence in the access list
 		if _, slotPresent := c.evm.StateDB.SlotInAccessList(c.contract.Address(), slot); !slotPresent {
@@ -643,7 +643,7 @@ func opSelfdestruct(c *context) {
 		return
 	}
 	gasfunc := gasSelfdestruct
-	if c.evm.ChainConfig().IsBerlin(c.evm.Context.BlockNumber) {
+	if c.isBerlin {
 		gasfunc = gasSelfdestructEIP2929
 	}
 	// even death is not for free
