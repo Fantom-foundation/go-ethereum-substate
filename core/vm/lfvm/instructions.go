@@ -262,7 +262,7 @@ func opSload(c *context) {
 		if _, slotPresent := c.evm.StateDB.SlotInAccessList(c.contract.Address(), slot); !slotPresent {
 			// If the caller cannot afford the cost, this change will be rolled back
 			// If he does afford it, we can skip checking the same thing later on, during execution
-			if c.interpreter == nil {
+			if !c.IsShadowed() {
 				c.evm.StateDB.AddSlotToAccessList(c.contract.Address(), slot)
 			}
 			if !c.UseGas(params.ColdSloadCostEIP2929) {

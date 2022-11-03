@@ -401,7 +401,7 @@ func gasSStoreEIP2929(c *context) (uint64, error) {
 	if addrPresent, slotPresent := c.evm.StateDB.SlotInAccessList(c.contract.Address(), slot); !slotPresent {
 		cost = params.ColdSloadCostEIP2929
 		// If the caller cannot afford the cost, this change will be rolled back
-		if c.interpreter == nil {
+		if !c.IsShadowed() {
 			c.evm.StateDB.AddSlotToAccessList(c.contract.Address(), slot)
 		}
 		if !addrPresent {
@@ -466,7 +466,7 @@ func gasEip2929AccountCheck(c *context, address common.Address) error {
 			if !c.UseGas(params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929) {
 				return vm.ErrOutOfGas
 			}
-			if c.interpreter == nil {
+			if !c.IsShadowed() {
 				c.evm.StateDB.AddAddressToAccessList(address)
 			}
 		}
@@ -484,7 +484,7 @@ func addressInAccessList(c *context) (warmAccess bool, coldCost uint64, err erro
 		// the cost to charge for cold access, if any, is Cold - Warm
 		coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
 		if !warmAccess {
-			if c.interpreter == nil {
+			if !c.IsShadowed() {
 				c.evm.StateDB.AddAddressToAccessList(addr)
 			}
 			// Charge the remaining difference here already, to correctly calculate available
@@ -518,7 +518,7 @@ func gasSelfdestructEIP2929(c *context) uint64 {
 	)
 	if !c.evm.StateDB.AddressInAccessList(address) {
 		// If the caller cannot afford the cost, this change will be rolled back
-		if c.interpreter == nil {
+		if !c.IsShadowed() {
 			c.evm.StateDB.AddAddressToAccessList(address)
 		}
 		gas = params.ColdAccountAccessCostEIP2929

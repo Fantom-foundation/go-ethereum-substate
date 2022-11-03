@@ -79,6 +79,10 @@ func (c *context) SignalError(err error) {
 	c.err = err
 }
 
+func (c *context) IsShadowed() bool {
+	return c.interpreter != nil
+}
+
 func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []byte, readOnly bool, state vm.StateDB, with_shadow_vm, with_statistics bool) ([]byte, error) {
 	if evm.Depth == 0 {
 		ClearShadowValues()
@@ -134,7 +138,7 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 	}()
 
 	// Run interpreter.
-	if ctxt.interpreter != nil {
+	if ctxt.IsShadowed() {
 		runWithShadowInterpreter(&ctxt)
 	} else if with_statistics {
 		runWithStatistics(&ctxt)
