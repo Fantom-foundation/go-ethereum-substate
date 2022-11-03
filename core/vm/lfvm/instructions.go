@@ -110,7 +110,7 @@ func opPush(c *context, n int) {
 }
 
 func opPush1(c *context) {
-	if c.stack.stack_ptr >= len(c.stack.data) {
+	if c.stack.full() {
 		c.status = ERROR
 		return
 	}
@@ -120,7 +120,7 @@ func opPush1(c *context) {
 }
 
 func opPush2(c *context) {
-	if c.stack.stack_ptr >= len(c.stack.data) {
+	if c.stack.full() {
 		c.status = ERROR
 		return
 	}
@@ -162,7 +162,7 @@ func opPush32(c *context) {
 
 func opDup(c *context, pos int) {
 	//fmt.Printf("DUP%d\n", pos)
-	if c.stack.stack_ptr < pos || c.stack.stack_ptr >= len(c.stack.data) {
+	if c.stack.stack_ptr < pos || c.stack.full() {
 		c.status = ERROR
 		return
 	}

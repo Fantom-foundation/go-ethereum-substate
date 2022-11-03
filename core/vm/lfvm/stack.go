@@ -53,6 +53,10 @@ func (s *Stack) Back(n int) *uint256.Int {
 	return &s.data[s.len()-n-1]
 }
 
+func (s *Stack) full() bool {
+	return s.stack_ptr >= len(s.data)
+}
+
 func ToHex(z *uint256.Int) string {
 	var b bytes.Buffer
 	b.WriteString("0x")
