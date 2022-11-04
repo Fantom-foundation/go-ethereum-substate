@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dropbox/godropbox/container/bitvector"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
@@ -399,7 +400,7 @@ func step(c *context) {
 	//fmt.Printf("%v\n", c.stack)
 	//fmt.Printf("0x%04x - %5d - %v\n", c.pc, c.contract.Gas, instruction)
 	// Consume static gas price for instruction before execution
-	if !c.UseGas(getGasPrice(c)) {
+	if !c.UseGas(getGasPrice(c, op)) {
 		return
 	}
 	// Execute instruction
@@ -741,19 +742,27 @@ func step(c *context) {
 	c.pc++
 }
 
-func getGasPrice(c *context) uint64 {
+func getGasPrice(c *context, op OpCode) uint64 {
 	// Idea: handle static gas price in static dispatch above (saves an array lookup)
-	op := c.code[c.pc].opcode
 	return getStaticGasPrice(op, c.isBerlin)
 }
 
-var writeIns = []OpCode{SSTORE, LOG0, LOG1, LOG2, LOG3, LOG4, CREATE, CREATE2, SELFDESTRUCT}
+var writeInts = getWriteInstructionMask()
+
+func getWriteInstructionMask() *bitvector.BitVector {
+	res := bitvector.NewBitVector(make([]byte, NUM_OPCODES/8+1), int(NUM_OPCODES))
+	res.Set(1, int(SSTORE))
+	res.Set(1, int(LOG0))
+	res.Set(1, int(LOG1))
+	res.Set(1, int(LOG2))
+	res.Set(1, int(LOG3))
+	res.Set(1, int(LOG4))
+	res.Set(1, int(CREATE))
+	res.Set(1, int(CREATE2))
+	res.Set(1, int(SELFDESTRUCT))
+	return res
+}
 
 func isWriteInstruction(opCode OpCode) bool {
-	for _, ins := range writeIns {
-		if ins == opCode {
-			return true
-		}
-	}
-	return false
+	return opCode < NUM_OPCODES && writeInts.Element(int(opCode)) == 1
 }
