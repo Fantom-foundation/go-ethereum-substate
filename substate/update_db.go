@@ -7,11 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 const (
-	SubstateAllocPrefix = "1s" // SubstateAllocPrefix + block (64-bit) + tx (64-bit) -> substateRLP
-	SubstateAllocCodePrefix     = "1c" // SubstateAllocCodePrefix + codeHash (256-bit) -> code
+	SubstateAllocPrefix     = "2s" // SubstateAllocPrefix + block (64-bit) + tx (64-bit) -> substateRLP
+	SubstateAllocCodePrefix = "2c" // SubstateAllocCodePrefix + codeHash (256-bit) -> code
 )
 
 func SubstateAllocKey(block uint64) []byte {
@@ -51,6 +52,16 @@ type UpdateDB struct {
 
 func NewUpdateDB(backend BackendDatabase) *UpdateDB {
 	return &UpdateDB{backend: backend}
+}
+
+func OpenUpdateDB(updateSetDir string) *UpdateDB {
+        fmt.Println("record-replay: OpenUpdateSetDB")
+        backend, err := rawdb.NewLevelDBDatabase(updateSetDir, 1024, 100, "updatesetdir", false)
+        if err != nil {
+                panic(fmt.Errorf("error opening update-set leveldb %s: %v", updateSetDir, err))
+        }
+        fmt.Println("record-replay: opened update-set DB successfully")
+        return NewUpdateDB(backend)
 }
 
 func (db *UpdateDB) Compact(start []byte, limit []byte) error {
@@ -103,7 +114,7 @@ func (db *UpdateDB) HasUpdateSet(block uint64) bool {
 	return has
 }
 
-func (alloc *SubstateAlloc) SetRLP2(allocRLP SubstateAllocRLP, db *UpdateDB) {
+func (alloc *SubstateAlloc) SetUpdateSetRLP(allocRLP SubstateAllocRLP, db *UpdateDB) {
 	*alloc = make(SubstateAlloc)
 	for i, addr := range allocRLP.Addresses {
 		var sa SubstateAccount
@@ -132,7 +143,7 @@ func (db *UpdateDB) GetUpdateSet(block uint64) *SubstateAlloc {
 	updateSetRLP := SubstateAllocRLP{}
 	err = rlp.DecodeBytes(value, &updateSetRLP)
 	updateSet := SubstateAlloc{}
-	updateSet.SetRLP2(updateSetRLP, db)
+	updateSet.SetUpdateSetRLP(updateSetRLP, db)
 	return &updateSet
 }
 
