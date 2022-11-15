@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dropbox/godropbox/container/bitvector"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
@@ -38,18 +39,20 @@ type context struct {
 	evm *vm.EVM
 
 	// Execution state
-	pc      int32
-	stack   *Stack
-	memory  *Memory
-	stateDB vm.StateDB
-	status  Status
-	err     error
+	pc       int32
+	stack    *Stack
+	memory   *Memory
+	stateDB  vm.StateDB
+	status   Status
+	err      error
+	isBerlin bool
 
 	// Inputs
 	contract *vm.Contract
 	code     Code
 	data     []byte
 	callsize uint256.Int
+	readOnly bool
 
 	// Intermediate data
 	return_data []byte
@@ -77,10 +80,20 @@ func (c *context) SignalError(err error) {
 	c.err = err
 }
 
+func (c *context) IsShadowed() bool {
+	return c.interpreter != nil
+}
+
 func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []byte, readOnly bool, state vm.StateDB, with_shadow_vm, with_statistics bool) ([]byte, error) {
 	if evm.Depth == 0 {
 		ClearShadowValues()
 	}
+
+	// Don't bother with the execution if there's no code.
+	if len(contract.Code) == 0 {
+		return nil, nil
+	}
+
 	// Increment the call depth which is restricted to 1024
 	evm.Depth++
 	defer func() { evm.Depth-- }()
@@ -118,13 +131,15 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		stateDB:     state,
 		callsize:    *uint256.NewInt(uint64(len(data))),
 		interpreter: shadow_interpreter,
+		readOnly:    readOnly,
+		isBerlin:    evm.ChainConfig().IsBerlin(evm.Context.BlockNumber),
 	}
 	defer func() {
 		ReturnStack(ctxt.stack)
 	}()
 
 	// Run interpreter.
-	if ctxt.interpreter != nil {
+	if ctxt.IsShadowed() {
 		runWithShadowInterpreter(&ctxt)
 	} else if with_statistics {
 		runWithStatistics(&ctxt)
@@ -138,8 +153,8 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		offset := ctxt.result_offset.Uint64()
 		size := ctxt.result_size.Uint64()
 		res = make([]byte, size)
-		ctxt.memory.EnsureCapacity(int(offset), int(size), &ctxt)
-		ctxt.memory.CopyData(int(offset), res[:])
+		ctxt.memory.EnsureCapacity(offset, size, &ctxt)
+		ctxt.memory.CopyData(offset, res[:])
 	}
 
 	// Handle return status
@@ -168,6 +183,15 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 
 func run(c *context) {
 	for c.status == RUNNING {
+
+		if int(c.pc) >= len(c.code) {
+			opStop(c)
+			return
+		}
+
+		for c.code[c.pc].opcode == JUMP_TO {
+			step(c)
+		}
 		step(c)
 	}
 }
@@ -175,6 +199,12 @@ func run(c *context) {
 func runWithShadowInterpreter(c *context) {
 	count := 0
 	for c.status == RUNNING {
+
+		if int(c.pc) >= len(c.code) {
+			opStop(c)
+			return
+		}
+
 		for c.code[c.pc].opcode == JUMP_TO {
 			step(c)
 		}
@@ -213,7 +243,7 @@ func runWithShadowInterpreter(c *context) {
 			fmt.Printf("Right: %v\n", *c.interpreter.Stack.Back(0))
 			panic("Stack top value divereged!")
 		}
-		if c.memory.Len() != c.interpreter.Memory.Len() {
+		if c.memory.Len() != uint64(c.interpreter.Memory.Len()) {
 			fmt.Printf("Left:  %v\n", c.memory.Len())
 			fmt.Printf("Right: %v\n", c.interpreter.Memory.Len())
 			panic("Memory size divereged!")
@@ -355,19 +385,26 @@ func runWithStatistics(c *context) {
 }
 
 func step(c *context) {
-	// TODO: remove this implicit stop at the end of a code section
-	if int(c.pc) >= len(c.code) {
-		opStop(c)
+
+	op := c.code[c.pc].opcode
+	// If the interpreter is operating in readonly mode, make sure no
+	// state-modifying operation is performed. The 3rd stack item
+	// for a call operation is the value. Transferring value from one
+	// account to the others means the state is modified and should also
+	// return with an error.
+	if c.readOnly && (isWriteInstruction(op) || (op == CALL && c.stack.Back(2).Sign() != 0)) {
+		c.err = vm.ErrWriteProtection
+		c.status = ERROR
 		return
 	}
 	//fmt.Printf("%v\n", c.stack)
 	//fmt.Printf("0x%04x - %5d - %v\n", c.pc, c.contract.Gas, instruction)
 	// Consume static gas price for instruction before execution
-	if !c.UseGas(getGasPrice(c)) {
+	if !c.UseGas(getGasPrice(c, op)) {
 		return
 	}
 	// Execute instruction
-	switch c.code[c.pc].opcode {
+	switch op {
 	case POP:
 		opPop(c)
 	case PUSH1:
@@ -430,6 +467,8 @@ func step(c *context) {
 		opMod(c)
 	case SMOD:
 		opSMod(c)
+	case ADDMOD:
+		opAddMod(c)
 	case EXP:
 		opExp(c)
 	case DUP5:
@@ -604,6 +643,8 @@ func step(c *context) {
 		opBalance(c)
 	case SELFBALANCE:
 		opSelfbalance(c)
+	case BASEFEE:
+		opBaseFee(c)
 	case SELFDESTRUCT:
 		opSelfdestruct(c)
 	case CHAINID:
@@ -696,13 +737,32 @@ func step(c *context) {
 	case PUSH1_PUSH1_PUSH1_SHL_SUB:
 		opPush1_Push1_Push1_Shl_Sub(c)
 	default:
-		panic(fmt.Sprintf("Unsupported operation: %v", c.code[c.pc].opcode))
+		panic(fmt.Sprintf("Unsupported operation: %v", op))
 	}
 	c.pc++
 }
 
-func getGasPrice(c *context) uint64 {
+func getGasPrice(c *context, op OpCode) uint64 {
 	// Idea: handle static gas price in static dispatch above (saves an array lookup)
-	op := c.code[c.pc].opcode
-	return getStaticGasPrice(op)
+	return getStaticGasPrice(op, c.isBerlin)
+}
+
+var writeInts = getWriteInstructionMask()
+
+func getWriteInstructionMask() *bitvector.BitVector {
+	res := bitvector.NewBitVector(make([]byte, NUM_OPCODES/8+1), int(NUM_OPCODES))
+	res.Set(1, int(SSTORE))
+	res.Set(1, int(LOG0))
+	res.Set(1, int(LOG1))
+	res.Set(1, int(LOG2))
+	res.Set(1, int(LOG3))
+	res.Set(1, int(LOG4))
+	res.Set(1, int(CREATE))
+	res.Set(1, int(CREATE2))
+	res.Set(1, int(SELFDESTRUCT))
+	return res
+}
+
+func isWriteInstruction(opCode OpCode) bool {
+	return opCode < NUM_OPCODES && writeInts.Element(int(opCode)) == 1
 }

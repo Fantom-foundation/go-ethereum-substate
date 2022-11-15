@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -13,17 +14,40 @@ import (
 const UNKNOWN_GAS_PRICE = 999999
 
 var static_gas_prices = [NUM_OPCODES]uint64{}
+var static_gas_prices_berlin = [NUM_OPCODES]uint64{}
 
 func init() {
+	var gp uint64
 	for i := 0; i < int(NUM_OPCODES); i++ {
-		static_gas_prices[i] = getStaticGasPriceInternal(OpCode(i))
+		gp = getStaticGasPriceInternal(OpCode(i))
+		static_gas_prices[i] = gp
+		static_gas_prices_berlin[i] = gp
 	}
+	initBerlinGasPrice()
 }
 
-func getStaticGasPrice(op OpCode) uint64 {
+func initBerlinGasPrice() {
+	// Changed static gas prices with EIP2929
+	static_gas_prices_berlin[SLOAD] = 0
+	static_gas_prices_berlin[EXTCODECOPY] = 100
+	static_gas_prices_berlin[EXTCODESIZE] = 100
+	static_gas_prices_berlin[EXTCODEHASH] = 100
+	static_gas_prices_berlin[BALANCE] = 100
+	static_gas_prices_berlin[CALL] = 100
+	static_gas_prices_berlin[CALLCODE] = 100
+	static_gas_prices_berlin[STATICCALL] = 100
+	static_gas_prices_berlin[DELEGATECALL] = 100
+	static_gas_prices_berlin[SELFDESTRUCT] = 5000
+}
+
+func getStaticGasPrice(op OpCode, isBerlin bool) uint64 {
 	var res uint64
-	if int(op) < len(static_gas_prices) {
-		res = static_gas_prices[int(op)]
+	gasPrice := &static_gas_prices
+	if isBerlin {
+		gasPrice = &static_gas_prices_berlin
+	}
+	if int(op) < len(gasPrice) {
+		res = gasPrice[int(op)]
 		if res != UNKNOWN_GAS_PRICE {
 			return res
 		}
@@ -104,7 +128,7 @@ func getStaticGasPriceInternal(op OpCode) uint64 {
 	case EXTCODESIZE:
 		return 700 // This seems to be different than documented on evm.codes (it should be 100)
 	case EXTCODECOPY:
-		return 100
+		return 700 // From EIP150 it is 700, was 20
 	case RETURNDATASIZE:
 		return 2
 	case RETURNDATACOPY:
@@ -270,19 +294,19 @@ func gasSStore(c *context) (uint64, error) {
 	return gasSStoreEIP2200(c)
 }
 
-// 0. If *gasleft* is less than or equal to 2300, fail the current call.
-// 1. If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
-// 2. If current value does not equal new value:
-//   2.1. If original value equals current value (this storage slot has not been changed by the current execution context):
+//  0. If *gasleft* is less than or equal to 2300, fail the current call.
+//  1. If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
+//  2. If current value does not equal new value:
+//     2.1. If original value equals current value (this storage slot has not been changed by the current execution context):
 //     2.1.1. If original value is 0, SSTORE_SET_GAS (20K) gas is deducted.
 //     2.1.2. Otherwise, SSTORE_RESET_GAS gas is deducted. If new value is 0, add SSTORE_CLEARS_SCHEDULE to refund counter.
-//   2.2. If original value does not equal current value (this storage slot is dirty), SLOAD_GAS gas is deducted. Apply both of the following clauses:
+//     2.2. If original value does not equal current value (this storage slot is dirty), SLOAD_GAS gas is deducted. Apply both of the following clauses:
 //     2.2.1. If original value is not 0:
-//       2.2.1.1. If current value is 0 (also means that new value is not 0), subtract SSTORE_CLEARS_SCHEDULE gas from refund counter.
-//       2.2.1.2. If new value is 0 (also means that current value is not 0), add SSTORE_CLEARS_SCHEDULE gas to refund counter.
+//     2.2.1.1. If current value is 0 (also means that new value is not 0), subtract SSTORE_CLEARS_SCHEDULE gas from refund counter.
+//     2.2.1.2. If new value is 0 (also means that current value is not 0), add SSTORE_CLEARS_SCHEDULE gas to refund counter.
 //     2.2.2. If original value equals new value (this storage slot is reset):
-//       2.2.2.1. If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
-//       2.2.2.2. Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
+//     2.2.2.1. If original value is 0, add SSTORE_SET_GAS - SLOAD_GAS to refund counter.
+//     2.2.2.2. Otherwise, add SSTORE_RESET_GAS - SLOAD_GAS gas to refund counter.
 func gasSStoreEIP2200(c *context) (uint64, error) {
 	//fmt.Printf("LFVM: Computing SSTORE costs based on EIP2200 rules ..\n")
 	// If we fail the minimum gas availability invariant, fail (0)
@@ -337,6 +361,126 @@ func gasSStoreEIP2200(c *context) (uint64, error) {
 	return params.SloadGasEIP2200, nil // dirty update (2.2)
 }
 
+func gasSStoreEIP2929(c *context) (uint64, error) {
+
+	clearingRefund := params.SstoreClearsScheduleRefundEIP2200
+	if c.evm.ChainConfig().IsLondon(c.evm.Context.BlockNumber) {
+		clearingRefund = params.SstoreClearsScheduleRefundEIP3529
+	}
+
+	// If we fail the minimum gas availability invariant, fail (0)
+	if c.contract.Gas <= params.SstoreSentryGasEIP2200 {
+		c.status = OUT_OF_GAS
+		return 0, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		y, x    = c.stack.Back(1), c.stack.peek()
+		slot    = common.Hash(x.Bytes32())
+		current = c.evm.StateDB.GetState(c.contract.Address(), slot)
+		cost    = uint64(0)
+	)
+	// Check slot presence in the access list
+	if addrPresent, slotPresent := c.evm.StateDB.SlotInAccessList(c.contract.Address(), slot); !slotPresent {
+		cost = params.ColdSloadCostEIP2929
+		// If the caller cannot afford the cost, this change will be rolled back
+		if !c.IsShadowed() {
+			c.evm.StateDB.AddSlotToAccessList(c.contract.Address(), slot)
+		}
+		if !addrPresent {
+			// Once we're done with YOLOv2 and schedule this for mainnet, might
+			// be good to remove this panic here, which is just really a
+			// canary to have during testing
+			panic("impossible case: address was not present in access list during sstore op")
+		}
+	}
+	value := common.Hash(y.Bytes32())
+
+	if current == value { // noop (1)
+		// EIP 2200 original clause:
+		//		return params.SloadGasEIP2200, nil
+		return cost + params.WarmStorageReadCostEIP2929, nil // SLOAD_GAS
+	}
+	original := c.evm.StateDB.GetCommittedState(c.contract.Address(), x.Bytes32())
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return cost + params.SstoreSetGasEIP2200, nil
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			c.evm.StateDB.AddRefund(clearingRefund)
+		}
+		// EIP-2200 original clause:
+		//		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
+		return cost + (params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929), nil // write existing slot (2.1.2)
+	}
+	if original != (common.Hash{}) {
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			c.evm.StateDB.SubRefund(clearingRefund)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			c.evm.StateDB.AddRefund(clearingRefund)
+		}
+	}
+	if original == value {
+		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			// EIP 2200 Original clause:
+			//evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
+			c.evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929)
+		} else { // reset to original existing slot (2.2.2.2)
+			// EIP 2200 Original clause:
+			//	evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
+			// - SSTORE_RESET_GAS redefined as (5000 - COLD_SLOAD_COST)
+			// - SLOAD_GAS redefined as WARM_STORAGE_READ_COST
+			// Final: (5000 - COLD_SLOAD_COST) - WARM_STORAGE_READ_COST
+			c.evm.StateDB.AddRefund((params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929) - params.WarmStorageReadCostEIP2929)
+		}
+	}
+	// EIP-2200 original clause:
+	//return params.SloadGasEIP2200, nil // dirty update (2.2)
+	return cost + params.WarmStorageReadCostEIP2929, nil // dirty update (2.2)
+}
+
+func gasEip2929AccountCheck(c *context, address common.Address) error {
+	if c.isBerlin {
+		// Charge extra for cold locations.
+
+		if !c.evm.StateDB.AddressInAccessList(address) {
+			// fmt.Printf("Reducing gas from %v to %v\n", c.contract.Gas, c.contract.Gas-2500)
+			// params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929 = 2600 -100
+			if !c.UseGas(params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929) {
+				return vm.ErrOutOfGas
+			}
+			if !c.IsShadowed() {
+				c.evm.StateDB.AddAddressToAccessList(address)
+			}
+		}
+	}
+	return nil
+}
+
+func addressInAccessList(c *context) (warmAccess bool, coldCost uint64, err error) {
+	warmAccess = true
+	if c.isBerlin {
+		addr := common.Address(c.stack.Back(1).Bytes20())
+		// Check slot presence in the access list
+		warmAccess = c.evm.StateDB.AddressInAccessList(addr)
+		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
+		// the cost to charge for cold access, if any, is Cold - Warm
+		coldCost = params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		if !warmAccess {
+			if !c.IsShadowed() {
+				c.evm.StateDB.AddAddressToAccessList(addr)
+			}
+			// Charge the remaining difference here already, to correctly calculate available
+			// gas for call
+			if !c.contract.UseGas(coldCost) {
+				c.status = OUT_OF_GAS
+				return false, 0, vm.ErrOutOfGas
+			}
+		}
+	}
+	return warmAccess, coldCost, nil
+}
+
 func gasSelfdestruct(c *context) uint64 {
 	gas := params.SelfdestructGasEIP150
 	var address = common.Address(c.stack.Back(0).Bytes20())
@@ -347,6 +491,31 @@ func gasSelfdestruct(c *context) uint64 {
 	}
 	if !c.stateDB.HasSuicided(c.contract.Address()) {
 		c.stateDB.AddRefund(params.SelfdestructRefundGas)
+	}
+	return gas
+}
+
+func gasSelfdestructEIP2929(c *context) uint64 {
+	var (
+		gas     uint64
+		address = common.Address(c.stack.Back(0).Bytes20())
+	)
+	if !c.evm.StateDB.AddressInAccessList(address) {
+		// If the caller cannot afford the cost, this change will be rolled back
+		if !c.IsShadowed() {
+			c.evm.StateDB.AddAddressToAccessList(address)
+		}
+		gas = params.ColdAccountAccessCostEIP2929
+	}
+	// if empty and transfers value
+	if c.evm.StateDB.Empty(address) && c.evm.StateDB.GetBalance(c.contract.Address()).Sign() != 0 {
+		gas += params.CreateBySelfdestructGas
+	}
+	// do this only for Berlin and not after London fork
+	if !c.evm.ChainConfig().IsLondon(c.evm.Context.BlockNumber) {
+		if !c.evm.StateDB.HasSuicided(c.contract.Address()) {
+			c.evm.StateDB.AddRefund(params.SelfdestructRefundGas)
+		}
 	}
 	return gas
 }
