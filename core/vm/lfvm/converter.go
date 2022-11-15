@@ -25,6 +25,12 @@ var changedAddress03 = common.HexToAddress("0xA8B3C9f298877dD93F30E8Ed359956faE1
 var mu = sync.Mutex{}
 var cache = map[cache_key]cache_val{}
 
+func clearConversionCache() {
+	mu.Lock()
+	defer mu.Unlock()
+	cache = map[cache_key]cache_val{}
+}
+
 func Convert(addr common.Address, code []byte, with_super_instructions bool, blk uint64, create bool) (Code, error) {
 	key := cache_key{addr, len(code)}
 	mu.Lock()
