@@ -19,6 +19,7 @@ package enode
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -62,6 +63,12 @@ func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
 }
 
 func (V4ID) Verify(r *enr.Record, sig []byte) error {
+	var opera operaNodeEnrEntry
+	err := r.Load(&opera)
+	if err != nil {
+		return fmt.Errorf("invalid opera node; %s", err.Error())
+	}
+
 	var entry s256raw
 	if err := r.Load(&entry); err != nil {
 		return err
@@ -157,4 +164,17 @@ func SignNull(r *enr.Record, id ID) *Node {
 		panic(err)
 	}
 	return &Node{r: *r, id: id}
+}
+
+// operaNodeEnrEntry is the ENR entry which advertises `eth` protocol on the discovery.
+type operaNodeEnrEntry struct {
+	ForkID forkid.ID // Fork identifier per EIP-2124
+
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
+}
+
+// ENRKey implements enr.Entry.
+func (e operaNodeEnrEntry) ENRKey() string {
+	return "opera"
 }
