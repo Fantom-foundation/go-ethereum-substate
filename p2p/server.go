@@ -657,6 +657,9 @@ func (srv *Server) setupDialScheduler() {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
 	srv.dialsched = newDialScheduler(config, srv.discmix, srv.SetupConn)
+	for _, n := range srv.PrivateNodes {
+		srv.dialsched.addStatic(n)
+	}
 	for _, n := range srv.StaticNodes {
 		srv.dialsched.addStatic(n)
 	}
@@ -732,6 +735,9 @@ func (srv *Server) run() {
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
 	for _, n := range srv.TrustedNodes {
+		trusted[n.ID()] = true
+	}
+	for _, n := range srv.PrivateNodes {
 		trusted[n.ID()] = true
 	}
 
