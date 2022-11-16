@@ -98,6 +98,13 @@ func (b *codeBuilder) appendData(data uint16) *codeBuilder {
 	return b.appendOp(DATA, data)
 }
 
+func (b *codeBuilder) padNoOpsUntil(pos int) {
+	for _, op := range b.code[b.nextPos:pos] {
+		op.opcode = NOOP
+	}
+	b.nextPos = pos
+}
+
 func (b *codeBuilder) toCode() Code {
 	return b.code[0:b.nextPos]
 }
@@ -116,9 +123,7 @@ func convert(code []byte, with_super_instructions bool) (Code, error) {
 			if res.length() < i {
 				res.appendOp(JUMP_TO, uint16(i))
 			}
-			for res.length() < i {
-				res.appendCode(NOOP)
-			}
+			res.padNoOpsUntil(i)
 			res.appendCode(JUMPDEST)
 			i++
 			continue
