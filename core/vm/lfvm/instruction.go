@@ -13,10 +13,15 @@ type Instruction struct {
 	arg uint16
 }
 
+// Instruction stack boundries for execution
 type InstructionStack struct {
+	// Minimum stack height because of pop or peek operations
 	stackMin int
+	// Maximal stack hight on which this instruction can be executed
+	// and not overflow
 	stackMax int
-	after    int
+	// Increase of stack after instruction execution
+	increase int
 }
 
 // Code for the macro EVM is a slice of instructions

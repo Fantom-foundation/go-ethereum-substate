@@ -103,11 +103,11 @@ func ReturnStack(s *Stack) {
 // ------------------ Stack Boundry ------------------
 
 // min is number of pop and max is pop - push
-func newInstructionStack(min, max, _after int) InstructionStack {
+func newInstructionStack(min, max, _increase int) InstructionStack {
 	return InstructionStack{
 		stackMin: min,
 		stackMax: int(params.StackLimit) - max,
-		after:    _after,
+		increase: _increase,
 	}
 }
 
