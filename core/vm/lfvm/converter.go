@@ -2,6 +2,7 @@ package lfvm
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -247,156 +248,172 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 	return []Instruction{instruction}, 0, err
 }
 
-var op_2_op = map[vm.OpCode]OpCode{
+var op_2_op = createOpToOpMap()
+
+func createOpToOpMap() []OpCode {
+	res := make([]OpCode, 256)
+	for i := range res {
+		res[i] = INVALID
+	}
+
 	// Stack operations
-	vm.POP:  POP,
-	vm.PUSH: INVALID,
+	res[vm.POP] = POP
 
-	vm.DUP1:  DUP1,
-	vm.DUP2:  DUP2,
-	vm.DUP3:  DUP3,
-	vm.DUP4:  DUP4,
-	vm.DUP5:  DUP5,
-	vm.DUP6:  DUP6,
-	vm.DUP7:  DUP7,
-	vm.DUP8:  DUP8,
-	vm.DUP9:  DUP9,
-	vm.DUP10: DUP10,
-	vm.DUP11: DUP11,
-	vm.DUP12: DUP12,
-	vm.DUP13: DUP13,
-	vm.DUP14: DUP14,
-	vm.DUP15: DUP15,
-	vm.DUP16: DUP16,
+	res[vm.DUP1] = DUP1
+	res[vm.DUP2] = DUP2
+	res[vm.DUP3] = DUP3
+	res[vm.DUP4] = DUP4
+	res[vm.DUP5] = DUP5
+	res[vm.DUP6] = DUP6
+	res[vm.DUP7] = DUP7
+	res[vm.DUP8] = DUP8
+	res[vm.DUP9] = DUP9
+	res[vm.DUP10] = DUP10
+	res[vm.DUP11] = DUP11
+	res[vm.DUP12] = DUP12
+	res[vm.DUP13] = DUP13
+	res[vm.DUP14] = DUP14
+	res[vm.DUP15] = DUP15
+	res[vm.DUP16] = DUP16
 
-	vm.SWAP1:  SWAP1,
-	vm.SWAP2:  SWAP2,
-	vm.SWAP3:  SWAP3,
-	vm.SWAP4:  SWAP4,
-	vm.SWAP5:  SWAP5,
-	vm.SWAP6:  SWAP6,
-	vm.SWAP7:  SWAP7,
-	vm.SWAP8:  SWAP8,
-	vm.SWAP9:  SWAP9,
-	vm.SWAP10: SWAP10,
-	vm.SWAP11: SWAP11,
-	vm.SWAP12: SWAP12,
-	vm.SWAP13: SWAP13,
-	vm.SWAP14: SWAP14,
-	vm.SWAP15: SWAP15,
-	vm.SWAP16: SWAP16,
+	res[vm.SWAP1] = SWAP1
+	res[vm.SWAP2] = SWAP2
+	res[vm.SWAP3] = SWAP3
+	res[vm.SWAP4] = SWAP4
+	res[vm.SWAP5] = SWAP5
+	res[vm.SWAP6] = SWAP6
+	res[vm.SWAP7] = SWAP7
+	res[vm.SWAP8] = SWAP8
+	res[vm.SWAP9] = SWAP9
+	res[vm.SWAP10] = SWAP10
+	res[vm.SWAP11] = SWAP11
+	res[vm.SWAP12] = SWAP12
+	res[vm.SWAP13] = SWAP13
+	res[vm.SWAP14] = SWAP14
+	res[vm.SWAP15] = SWAP15
+	res[vm.SWAP16] = SWAP16
 
 	// Memory operations
-	vm.MLOAD:   MLOAD,
-	vm.MSTORE:  MSTORE,
-	vm.MSTORE8: MSTORE8,
-	vm.MSIZE:   MSIZE,
+	res[vm.MLOAD] = MLOAD
+	res[vm.MSTORE] = MSTORE
+	res[vm.MSTORE8] = MSTORE8
+	res[vm.MSIZE] = MSIZE
 
 	// Storage operations
-	vm.SLOAD:  SLOAD,
-	vm.SSTORE: SSTORE,
+	res[vm.SLOAD] = SLOAD
+	res[vm.SSTORE] = SSTORE
 
 	// Control flow
-	vm.JUMP:    JUMP,
-	vm.JUMPI:   JUMPI,
-	vm.STOP:    STOP,
-	vm.RETURN:  RETURN,
-	vm.REVERT:  REVERT,
-	vm.INVALID: INVALID,
-	vm.PC:      PC,
+	res[vm.JUMP] = JUMP
+	res[vm.JUMPI] = JUMPI
+	res[vm.JUMPDEST] = JUMPDEST
+	res[vm.STOP] = STOP
+	res[vm.RETURN] = RETURN
+	res[vm.REVERT] = REVERT
+	res[vm.INVALID] = INVALID
+	res[vm.PC] = PC
 
 	// Arithmethic operations
-	vm.ADD:        ADD,
-	vm.MUL:        MUL,
-	vm.SUB:        SUB,
-	vm.DIV:        DIV,
-	vm.SDIV:       SDIV,
-	vm.MOD:        MOD,
-	vm.SMOD:       SMOD,
-	vm.ADDMOD:     ADDMOD,
-	vm.MULMOD:     MULMOD,
-	vm.EXP:        EXP,
-	vm.SIGNEXTEND: SIGNEXTEND,
+	res[vm.ADD] = ADD
+	res[vm.MUL] = MUL
+	res[vm.SUB] = SUB
+	res[vm.DIV] = DIV
+	res[vm.SDIV] = SDIV
+	res[vm.MOD] = MOD
+	res[vm.SMOD] = SMOD
+	res[vm.ADDMOD] = ADDMOD
+	res[vm.MULMOD] = MULMOD
+	res[vm.EXP] = EXP
+	res[vm.SIGNEXTEND] = SIGNEXTEND
 
 	// Complex function
-	vm.SHA3: SHA3,
+	res[vm.SHA3] = SHA3
 
 	// Comparison operations
-	vm.LT:     LT,
-	vm.GT:     GT,
-	vm.SLT:    SLT,
-	vm.SGT:    SGT,
-	vm.EQ:     EQ,
-	vm.ISZERO: ISZERO,
+	res[vm.LT] = LT
+	res[vm.GT] = GT
+	res[vm.SLT] = SLT
+	res[vm.SGT] = SGT
+	res[vm.EQ] = EQ
+	res[vm.ISZERO] = ISZERO
 
 	// Bit-pattern operations
-	vm.AND:  AND,
-	vm.OR:   OR,
-	vm.XOR:  XOR,
-	vm.NOT:  NOT,
-	vm.BYTE: BYTE,
-	vm.SHL:  SHL,
-	vm.SHR:  SHR,
-	vm.SAR:  SAR,
+	res[vm.AND] = AND
+	res[vm.OR] = OR
+	res[vm.XOR] = XOR
+	res[vm.NOT] = NOT
+	res[vm.BYTE] = BYTE
+	res[vm.SHL] = SHL
+	res[vm.SHR] = SHR
+	res[vm.SAR] = SAR
 
 	// System instructions
-	vm.ADDRESS:        ADDRESS,
-	vm.BALANCE:        BALANCE,
-	vm.ORIGIN:         ORIGIN,
-	vm.CALLER:         CALLER,
-	vm.CALLVALUE:      CALLVALUE,
-	vm.CALLDATALOAD:   CALLDATALOAD,
-	vm.CALLDATASIZE:   CALLDATASIZE,
-	vm.CALLDATACOPY:   CALLDATACOPY,
-	vm.CODESIZE:       CODESIZE,
-	vm.CODECOPY:       CODECOPY,
-	vm.GAS:            GAS,
-	vm.GASPRICE:       GASPRICE,
-	vm.EXTCODESIZE:    EXTCODESIZE,
-	vm.EXTCODECOPY:    EXTCODECOPY,
-	vm.RETURNDATASIZE: RETURNDATASIZE,
-	vm.RETURNDATACOPY: RETURNDATACOPY,
-	vm.EXTCODEHASH:    EXTCODEHASH,
-	vm.CREATE:         CREATE,
-	vm.CALL:           CALL,
-	vm.CALLCODE:       CALLCODE,
-	vm.DELEGATECALL:   DELEGATECALL,
-	vm.CREATE2:        CREATE2,
-	vm.STATICCALL:     STATICCALL,
-	vm.SELFDESTRUCT:   SELFDESTRUCT,
+	res[vm.ADDRESS] = ADDRESS
+	res[vm.BALANCE] = BALANCE
+	res[vm.ORIGIN] = ORIGIN
+	res[vm.CALLER] = CALLER
+	res[vm.CALLVALUE] = CALLVALUE
+	res[vm.CALLDATALOAD] = CALLDATALOAD
+	res[vm.CALLDATASIZE] = CALLDATASIZE
+	res[vm.CALLDATACOPY] = CALLDATACOPY
+	res[vm.CODESIZE] = CODESIZE
+	res[vm.CODECOPY] = CODECOPY
+	res[vm.GAS] = GAS
+	res[vm.GASPRICE] = GASPRICE
+	res[vm.EXTCODESIZE] = EXTCODESIZE
+	res[vm.EXTCODECOPY] = EXTCODECOPY
+	res[vm.RETURNDATASIZE] = RETURNDATASIZE
+	res[vm.RETURNDATACOPY] = RETURNDATACOPY
+	res[vm.EXTCODEHASH] = EXTCODEHASH
+	res[vm.CREATE] = CREATE
+	res[vm.CALL] = CALL
+	res[vm.CALLCODE] = CALLCODE
+	res[vm.DELEGATECALL] = DELEGATECALL
+	res[vm.CREATE2] = CREATE2
+	res[vm.STATICCALL] = STATICCALL
+	res[vm.SELFDESTRUCT] = SELFDESTRUCT
 
 	// Block chain instructions
-	vm.BLOCKHASH:   BLOCKHASH,
-	vm.COINBASE:    COINBASE,
-	vm.TIMESTAMP:   TIMESTAMP,
-	vm.NUMBER:      NUMBER,
-	vm.DIFFICULTY:  DIFFICULTY,
-	vm.GASLIMIT:    GASLIMIT,
-	vm.CHAINID:     CHAINID,
-	vm.SELFBALANCE: SELFBALANCE,
-	vm.BASEFEE:     BASEFEE,
+	res[vm.BLOCKHASH] = BLOCKHASH
+	res[vm.COINBASE] = COINBASE
+	res[vm.TIMESTAMP] = TIMESTAMP
+	res[vm.NUMBER] = NUMBER
+	res[vm.DIFFICULTY] = DIFFICULTY
+	res[vm.GASLIMIT] = GASLIMIT
+	res[vm.CHAINID] = CHAINID
+	res[vm.SELFBALANCE] = SELFBALANCE
+	res[vm.BASEFEE] = BASEFEE
 
 	// Log instructions
-	vm.LOG0: LOG0,
-	vm.LOG1: LOG1,
-	vm.LOG2: LOG2,
-	vm.LOG3: LOG3,
-	vm.LOG4: LOG4,
+	res[vm.LOG0] = LOG0
+	res[vm.LOG1] = LOG1
+	res[vm.LOG2] = LOG2
+	res[vm.LOG3] = LOG3
+	res[vm.LOG4] = LOG4
+
+	// Test that all EVM instructions are covered.
+	for i := 0; i < 256; i++ {
+		code := vm.OpCode(i)
+
+		// Known OpCodes that are indeed invalid.
+		if code == vm.INVALID || code == vm.PUSH || code == vm.SWAP || code == vm.DUP {
+			continue
+		}
+
+		// Push operations are not required to be mapped, they are handled explicitly.
+		if vm.PUSH1 <= code && code <= vm.PUSH32 {
+			continue
+		}
+
+		opIsValid := !strings.Contains(fmt.Sprintf("%v", code), "not defined")
+		if res[code] == INVALID && opIsValid {
+			panic(fmt.Sprintf("Missing instruction coverage for: %v", code))
+		}
+	}
+
+	return res
 }
 
 func toInstruction(opcode vm.OpCode) (Instruction, error) {
-	res, found := op_2_op[opcode]
-	if !found {
-		if !isValidVmOpcode(opcode) {
-			// Everything that is not an op-code results in an invalid instruction.
-			res = INVALID
-		} else {
-			return Instruction{}, fmt.Errorf("unsupported opcode in converter: %v", opcode)
-		}
-	}
-	return Instruction{opcode: res}, nil
-}
-
-func isValidVmOpcode(code vm.OpCode) bool {
-	return code != vm.SWAP && code != vm.DUP && code != vm.POP && fmt.Sprintf("%v", code)[0:2] != "op"
+	return Instruction{opcode: op_2_op[opcode]}, nil
 }
