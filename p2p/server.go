@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"slices"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discover/discfilter"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -830,6 +832,10 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 	case c.node.ID() == srv.localnode.ID():
 		return DiscSelf
 	default:
+		if !c.is(trustedConn) && discfilter.Banned(c.node.ID(), c.node.Record()) && rand.Intn(5) != 0 {
+			// rarely accept useless peers
+			return DiscUselessPeer
+		}
 		return nil
 	}
 }
