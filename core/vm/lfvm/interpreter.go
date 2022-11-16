@@ -674,6 +674,8 @@ func step(c *context) {
 		opGasPrice(c)
 	case CALL:
 		opCall(c)
+	case CALLCODE:
+		opCallCode(c)
 	case STATICCALL:
 		opStaticCall(c)
 	case DELEGATECALL:

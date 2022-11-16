@@ -155,13 +155,10 @@ func getStaticStackInternal(op OpCode) InstructionStack {
 		return newInstructionStack(3, 1, 1)
 	case CREATE2:
 		return newInstructionStack(4, 1, 1)
-	case CALL:
+	case CALL, CALLCODE:
 		return newInstructionStack(7, 1, 1)
 	case STATICCALL, DELEGATECALL:
 		return newInstructionStack(6, 1, 1)
-	case CALLCODE:
-		// TODO CallCode instruction not implemented
-		newInstructionStack(0, 0, 0)
 	}
 	return newInstructionStack(0, 0, 0)
 }
