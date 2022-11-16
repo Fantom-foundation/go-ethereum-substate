@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+var staticStackBoundry = [NUM_OPCODES]InstructionStack{}
 
 type Stack struct {
 	data      [1024]uint256.Int
 	stack_ptr int
+}
+
+func init() {
+	for i := 0; i < int(NUM_OPCODES); i++ {
+		staticStackBoundry[OpCode(i)] = getStaticStackInternal(OpCode(i))
+	}
 }
 
 func (s *Stack) Data() []uint256.Int {
@@ -53,10 +62,6 @@ func (s *Stack) Back(n int) *uint256.Int {
 	return &s.data[s.len()-n-1]
 }
 
-func (s *Stack) full() bool {
-	return s.stack_ptr >= len(s.data)
-}
-
 func ToHex(z *uint256.Int) string {
 	var b bytes.Buffer
 	b.WriteString("0x")
@@ -93,4 +98,70 @@ func NewStack() *Stack {
 func ReturnStack(s *Stack) {
 	s.stack_ptr = 0
 	stackPool.Put(s)
+}
+
+// ------------------ Stack Boundry ------------------
+
+// min is number of pop and max is pop - push
+func newInstructionStack(min, max, _after int) InstructionStack {
+	return InstructionStack{
+		stackMin: min,
+		stackMax: int(params.StackLimit) - max,
+		after:    _after,
+	}
+}
+
+func getStaticStackInternal(op OpCode) InstructionStack {
+
+	if PUSH1 <= op && op <= PUSH32 {
+		return newInstructionStack(0, 1, 1)
+	}
+	if DUP1 <= op && op <= DUP16 {
+		return newInstructionStack(int(op)-int(DUP1)+1, 1, 1)
+	}
+	if SWAP1 <= op && op <= SWAP16 {
+		return newInstructionStack(int(op)-int(SWAP1)+1, 0, 0)
+	}
+	if LOG0 <= op && op <= LOG4 {
+		return newInstructionStack(int(op)-int(LOG0)+2, 0, 0)
+	}
+
+	switch op {
+	case JUMPDEST, JUMP_TO, STOP, INVALID:
+		return newInstructionStack(0, 0, 0)
+	case ADD, SUB, MUL, DIV, SDIV, MOD, SMOD, EXP, SIGNEXTEND,
+		SHA3, LT, GT, SLT, SGT, EQ, AND, XOR, OR, BYTE,
+		SHL, SHR, SAR:
+		return newInstructionStack(2, 0, 1)
+	case ADDMOD, MULMOD:
+		return newInstructionStack(3, 0, 1)
+	case ISZERO, NOT, BALANCE, CALLDATALOAD, EXTCODESIZE,
+		BLOCKHASH, MLOAD, SLOAD, EXTCODEHASH:
+		return newInstructionStack(1, 0, 1)
+	case MSIZE, ADDRESS, ORIGIN, CALLER, CALLVALUE, CALLDATASIZE,
+		CODESIZE, GASPRICE, COINBASE, TIMESTAMP, NUMBER,
+		DIFFICULTY, GASLIMIT, PC, GAS, RETURNDATASIZE,
+		SELFBALANCE, CHAINID, BASEFEE:
+		return newInstructionStack(0, 1, 1)
+	case POP, JUMP, SELFDESTRUCT:
+		return newInstructionStack(1, 0, 0)
+	case MSTORE, MSTORE8, SSTORE, JUMPI, RETURN, REVERT:
+		return newInstructionStack(2, 0, 0)
+	case CALLDATACOPY, CODECOPY, RETURNDATACOPY:
+		return newInstructionStack(3, 0, 0)
+	case EXTCODECOPY:
+		return newInstructionStack(4, 0, 0)
+	case CREATE:
+		return newInstructionStack(3, 1, 1)
+	case CREATE2:
+		return newInstructionStack(4, 1, 1)
+	case CALL:
+		return newInstructionStack(7, 1, 1)
+	case STATICCALL, DELEGATECALL:
+		return newInstructionStack(6, 1, 1)
+	case CALLCODE:
+		// TODO CallCode instruction not implemented
+		newInstructionStack(0, 0, 0)
+	}
+	return newInstructionStack(0, 0, 0)
 }

@@ -13,6 +13,12 @@ type Instruction struct {
 	arg uint16
 }
 
+type InstructionStack struct {
+	stackMin int
+	stackMax int
+	after    int
+}
+
 // Code for the macro EVM is a slice of instructions
 type Code []Instruction
 

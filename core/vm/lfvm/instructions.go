@@ -23,10 +23,6 @@ func opStop(c *context) {
 
 func opRevert(c *context) {
 	//fmt.Printf("REVERT\n")
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	c.result_offset = *c.stack.pop()
 	c.result_size = *c.stack.pop()
 	c.status = REVERTED
@@ -110,20 +106,12 @@ func opPush(c *context, n int) {
 }
 
 func opPush1(c *context) {
-	if c.stack.full() {
-		c.status = ERROR
-		return
-	}
 	z := c.stack.pushEmpty()
 	z[3], z[2], z[1] = 0, 0, 0
 	z[0] = uint64(c.code[c.pc].arg >> 8)
 }
 
 func opPush2(c *context) {
-	if c.stack.full() {
-		c.status = ERROR
-		return
-	}
 	z := c.stack.pushEmpty()
 	z[3], z[2], z[1] = 0, 0, 0
 	z[0] = uint64(c.code[c.pc].arg)
@@ -162,19 +150,11 @@ func opPush32(c *context) {
 
 func opDup(c *context, pos int) {
 	//fmt.Printf("DUP%d\n", pos)
-	if c.stack.len() < pos || c.stack.full() {
-		c.status = ERROR
-		return
-	}
 	c.stack.dup(pos)
 }
 
 func opSwap(c *context, pos int) {
 	//fmt.Printf("SWAP%d\n", pos)
-	if c.stack.len() < pos {
-		c.status = ERROR
-		return
-	}
 	c.stack.swap(pos + 1)
 }
 
@@ -194,10 +174,6 @@ func opMstore(c *context) {
 }
 
 func opMstore8(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	var addr = c.stack.pop()
 	var value = c.stack.pop()
 
@@ -230,10 +206,6 @@ func opMsize(c *context) {
 }
 
 func opSstore(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	gasfunc := gasSStore
 	if c.isBerlin {
 		gasfunc = gasSStoreEIP2929
@@ -314,10 +286,6 @@ func opCallDataload(c *context) {
 }
 
 func opCallDataCopy(c *context) {
-	if c.stack.len() < 3 {
-		c.status = ERROR
-		return
-	}
 	var (
 		memOffset  = c.stack.pop()
 		dataOffset = c.stack.pop()
@@ -345,10 +313,6 @@ func opCallDataCopy(c *context) {
 }
 
 func opAnd(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	//fmt.Printf("AND\n")
 	a := c.stack.pop()
 	b := c.stack.peek()
@@ -356,10 +320,6 @@ func opAnd(c *context) {
 }
 
 func opOr(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	//fmt.Printf("OR\n")
 	a := c.stack.pop()
 	b := c.stack.peek()
@@ -373,10 +333,6 @@ func opNot(c *context) {
 }
 
 func opXor(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	//fmt.Printf("OR\n")
 	a := c.stack.pop()
 	b := c.stack.peek()
@@ -490,10 +446,6 @@ func opAdd(c *context) {
 }
 
 func opSub(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	a := c.stack.pop()
 	b := c.stack.peek()
 	b.Sub(a, b)
@@ -506,10 +458,6 @@ func opMul(c *context) {
 }
 
 func opMulMod(c *context) {
-	if c.stack.len() < 3 {
-		c.status = ERROR
-		return
-	}
 	a := c.stack.pop()
 	b := c.stack.pop()
 	n := c.stack.peek()
@@ -548,10 +496,6 @@ func opSMod(c *context) {
 }
 
 func opExp(c *context) {
-	if c.stack.len() < 2 {
-		c.status = ERROR
-		return
-	}
 	base, exponent := c.stack.pop(), c.stack.peek()
 	if !c.UseGas(uint64(50 * exponent.ByteLen())) {
 		return
@@ -634,10 +578,6 @@ func opBaseFee(c *context) {
 }
 
 func opSelfdestruct(c *context) {
-	if c.stack.len() < 1 {
-		c.status = ERROR
-		return
-	}
 	gasfunc := gasSelfdestruct
 	if c.isBerlin {
 		gasfunc = gasSelfdestructEIP2929
@@ -836,10 +776,6 @@ func getData(data []byte, start uint64, size uint64) []byte {
 }
 
 func opExtCodeCopy(c *context) {
-	if c.stack.len() < 4 {
-		c.status = ERROR
-		return
-	}
 	var (
 		stack      = c.stack
 		a          = stack.pop()
@@ -877,11 +813,6 @@ func neededMemorySize(offset, size *uint256.Int) uint64 {
 }
 
 func opCall(c *context) {
-	if c.stack.len() < 7 {
-		c.status = ERROR
-		return
-	}
-
 	warmAccess, coldCost, err := addressInAccessList(c)
 	if err != nil {
 		return
@@ -1025,10 +956,6 @@ func opStaticCall(c *context) {
 }
 
 func opDelegateCall(c *context) {
-	if c.stack.len() < 6 {
-		c.status = ERROR
-		return
-	}
 	warmAccess, coldCost, err := addressInAccessList(c)
 	if err != nil {
 		return
