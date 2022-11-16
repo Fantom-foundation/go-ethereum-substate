@@ -403,6 +403,17 @@ func step(c *context) {
 	if !c.UseGas(getGasPrice(c, op)) {
 		return
 	}
+
+	if c.stack.len() < staticStackBoundry[op].stackMin {
+		c.err = &vm.ErrStackUnderflow{}
+		c.status = ERROR
+		return
+	} else if c.stack.len() > staticStackBoundry[op].stackMax {
+		c.err = &vm.ErrStackOverflow{}
+		c.status = ERROR
+		return
+	}
+
 	// Execute instruction
 	switch op {
 	case POP:
@@ -663,6 +674,8 @@ func step(c *context) {
 		opGasPrice(c)
 	case CALL:
 		opCall(c)
+	case CALLCODE:
+		opCallCode(c)
 	case STATICCALL:
 		opStaticCall(c)
 	case DELEGATECALL:
