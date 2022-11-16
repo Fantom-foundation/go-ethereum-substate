@@ -282,23 +282,21 @@ func appendInstructions(res *codeBuilder, pos int, code []byte, with_super_instr
 		}
 
 		// Fix the op-codes of the resulting instructions
-		numOps := n/2 + n%2
-		buffer := [16]uint16{} // < using static size to allocate on stack
-		args := buffer[0:numOps]
+		data := code[pos+1 : pos+1+n]
+		if n == 1 {
+			res.appendOp(PUSH1, uint16(data[0])<<8)
+		} else {
+			res.appendOp(PUSH1+OpCode(n-1), uint16(data[0])<<8|uint16(data[1]))
+		}
 
 		// Fix the arguments by packing them in pairs into the instructions.
-		for i := 0; i < n; i += 2 {
-			args[i/2] = uint16(code[pos+i+1])<<8 | uint16(code[pos+i+2])
+		for i := 2; i < n-1; i += 2 {
+			res.appendData(uint16(data[i])<<8 | uint16(data[i+1]))
 		}
-		if n%2 == 1 {
-			args[n/2] = uint16(code[pos+n]) << 8
+		if n > 1 && n%2 == 1 {
+			res.appendData(uint16(data[n-1]) << 8)
 		}
 
-		// Append encoded operations to result
-		res.appendOp(PUSH1+OpCode(n-1), args[0])
-		for i := 1; i < numOps; i++ {
-			res.appendData(args[i])
-		}
 		return n, nil
 	}
 
