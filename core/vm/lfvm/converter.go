@@ -68,40 +68,73 @@ func Convert(addr common.Address, code []byte, with_super_instructions bool, blk
 	return resCode, nil
 }
 
+type codeBuilder struct {
+	code    []Instruction
+	nextPos int
+}
+
+func newCodeBuilder(codelength int) codeBuilder {
+	return codeBuilder{make([]Instruction, codelength), 0}
+}
+
+func (b *codeBuilder) length() int {
+	return b.nextPos
+}
+
+func (b *codeBuilder) appendOp(opcode OpCode, arg uint16) *codeBuilder {
+	b.code[b.nextPos].opcode = opcode
+	b.code[b.nextPos].arg = arg
+	b.nextPos++
+	return b
+}
+
+func (b *codeBuilder) appendCode(opcode OpCode) *codeBuilder {
+	b.code[b.nextPos].opcode = opcode
+	b.nextPos++
+	return b
+}
+
+func (b *codeBuilder) appendData(data uint16) *codeBuilder {
+	return b.appendOp(DATA, data)
+}
+
+func (b *codeBuilder) toCode() Code {
+	return b.code[0:b.nextPos]
+}
+
 func convert(code []byte, with_super_instructions bool) (Code, error) {
-	res := make([]Instruction, 0, len(code))
+	res := newCodeBuilder(len(code))
 
 	// Convert each individual instruction.
 	for i := 0; i < len(code); {
 		// Handle jump destinations
 		if code[i] == byte(vm.JUMPDEST) {
-			if len(res) > i {
+			if res.length() > i {
 				return nil, fmt.Errorf("unable to convert code, encountered targe block larger than input")
 			}
 			// Jump to the next jump destination and fill space with noops
-			if len(res) < i {
-				res = append(res, Instruction{opcode: JUMP_TO, arg: uint16(i)})
+			if res.length() < i {
+				res.appendOp(JUMP_TO, uint16(i))
 			}
-			for len(res) < i {
-				res = append(res, Instruction{opcode: NOOP})
+			for res.length() < i {
+				res.appendCode(NOOP)
 			}
-			res = append(res, Instruction{opcode: JUMPDEST})
+			res.appendCode(JUMPDEST)
 			i++
 			continue
 		}
 
 		// Convert instructions
-		instructions, inc, err := toInstructions(i, code, with_super_instructions)
+		inc, err := appendInstructions(&res, i, code, with_super_instructions)
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, instructions...)
 		i += inc + 1
 	}
-	return res, nil
+	return res.toCode(), nil
 }
 
-func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instruction, int, error) {
+func appendInstructions(res *codeBuilder, pos int, code []byte, with_super_instructions bool) (int, error) {
 	// Convert super instructions.
 	if with_super_instructions {
 		if len(code) > pos+7 {
@@ -114,17 +147,15 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			op6 := vm.OpCode(code[pos+6])
 			op7 := vm.OpCode(code[pos+7])
 			if op0 == vm.PUSH1 && op2 == vm.PUSH4 && op7 == vm.DUP3 {
-				return []Instruction{
-					{opcode: PUSH1_PUSH4_DUP3, arg: uint16(op1)},
-					{opcode: DATA, arg: uint16(op3)<<8 | uint16(op4)},
-					{opcode: DATA, arg: uint16(op5)<<8 | uint16(op6)},
-				}, 7, nil
+				res.appendOp(PUSH1_PUSH4_DUP3, uint16(op1))
+				res.appendData(uint16(op3)<<8 | uint16(op4))
+				res.appendData(uint16(op5)<<8 | uint16(op6))
+				return 7, nil
 			}
 			if op0 == vm.PUSH1 && op2 == vm.PUSH1 && op4 == vm.PUSH1 && op6 == vm.SHL && op7 == vm.SUB {
-				return []Instruction{
-					{opcode: PUSH1_PUSH1_PUSH1_SHL_SUB, arg: uint16(op1)<<8 | uint16(op3)},
-					{opcode: DATA, arg: uint16(op5)},
-				}, 7, nil
+				res.appendOp(PUSH1_PUSH1_PUSH1_SHL_SUB, uint16(op1)<<8|uint16(op3))
+				res.appendData(uint16(op5))
+				return 7, nil
 			}
 		}
 		if len(code) > pos+4 {
@@ -134,10 +165,12 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			op3 := vm.OpCode(code[pos+3])
 			op4 := vm.OpCode(code[pos+4])
 			if op0 == vm.AND && op1 == vm.SWAP1 && op2 == vm.POP && op3 == vm.SWAP2 && op4 == vm.SWAP1 {
-				return []Instruction{{opcode: AND_SWAP1_POP_SWAP2_SWAP1}}, 4, nil
+				res.appendCode(AND_SWAP1_POP_SWAP2_SWAP1)
+				return 4, nil
 			}
 			if op0 == vm.ISZERO && op1 == vm.PUSH2 && op4 == vm.JUMPI {
-				return []Instruction{{opcode: ISZERO_PUSH2_JUMPI, arg: uint16(op2)<<8 | uint16(op3)}}, 4, nil
+				res.appendOp(ISZERO_PUSH2_JUMPI, uint16(op2)<<8|uint16(op3))
+				return 4, nil
 			}
 		}
 		if len(code) > pos+3 {
@@ -146,22 +179,28 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			op2 := vm.OpCode(code[pos+2])
 			op3 := vm.OpCode(code[pos+3])
 			if op0 == vm.SWAP2 && op1 == vm.SWAP1 && op2 == vm.POP && op3 == vm.JUMP {
-				return []Instruction{{opcode: SWAP2_SWAP1_POP_JUMP}}, 3, nil
+				res.appendCode(SWAP2_SWAP1_POP_JUMP)
+				return 3, nil
 			}
 			if op0 == vm.SWAP1 && op1 == vm.POP && op2 == vm.SWAP2 && op3 == vm.SWAP1 {
-				return []Instruction{{opcode: SWAP1_POP_SWAP2_SWAP1}}, 3, nil
+				res.appendCode(SWAP1_POP_SWAP2_SWAP1)
+				return 3, nil
 			}
 			if op0 == vm.POP && op1 == vm.SWAP2 && op2 == vm.SWAP1 && op3 == vm.POP {
-				return []Instruction{{opcode: POP_SWAP2_SWAP1_POP}}, 3, nil
+				res.appendCode(POP_SWAP2_SWAP1_POP)
+				return 3, nil
 			}
 			if op0 == vm.PUSH2 && op3 == vm.JUMP {
-				return []Instruction{{opcode: PUSH2_JUMP, arg: uint16(op1)<<8 | uint16(op2)}}, 3, nil
+				res.appendOp(PUSH2_JUMP, uint16(op1)<<8|uint16(op2))
+				return 3, nil
 			}
 			if op0 == vm.PUSH2 && op3 == vm.JUMPI {
-				return []Instruction{{opcode: PUSH2_JUMPI, arg: uint16(op1)<<8 | uint16(op2)}}, 3, nil
+				res.appendOp(PUSH2_JUMPI, uint16(op1)<<8|uint16(op2))
+				return 3, nil
 			}
 			if op0 == vm.PUSH1 && op2 == vm.PUSH1 {
-				return []Instruction{{opcode: PUSH1_PUSH1, arg: uint16(op1)<<8 | uint16(op3)}}, 3, nil
+				res.appendOp(PUSH1_PUSH1, uint16(op1)<<8|uint16(op3))
+				return 3, nil
 			}
 		}
 		if len(code) > pos+2 {
@@ -169,38 +208,48 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 			op1 := vm.OpCode(code[pos+1])
 			op2 := vm.OpCode(code[pos+2])
 			if op0 == vm.PUSH1 && op2 == vm.ADD {
-				return []Instruction{{opcode: PUSH1_ADD, arg: uint16(op1)}}, 2, nil
+				res.appendOp(PUSH1_ADD, uint16(op1))
+				return 2, nil
 			}
 			if op0 == vm.PUSH1 && op2 == vm.SHL {
-				return []Instruction{{opcode: PUSH1_SHL, arg: uint16(op1)}}, 2, nil
+				res.appendOp(PUSH1_SHL, uint16(op1))
+				return 2, nil
 			}
 			if op0 == vm.PUSH1 && op2 == vm.DUP1 {
-				return []Instruction{{opcode: PUSH1_DUP1, arg: uint16(op1)}}, 2, nil
+				res.appendOp(PUSH1_DUP1, uint16(op1))
+				return 2, nil
 			}
 		}
 		if len(code) > pos+1 {
 			op0 := vm.OpCode(code[pos])
 			op1 := vm.OpCode(code[pos+1])
 			if op0 == vm.SWAP1 && op1 == vm.POP {
-				return []Instruction{{opcode: SWAP1_POP}}, 1, nil
+				res.appendCode(SWAP1_POP)
+				return 1, nil
 			}
 			if op0 == vm.POP && op1 == vm.JUMP {
-				return []Instruction{{opcode: POP_JUMP}}, 1, nil
+				res.appendCode(POP_JUMP)
+				return 1, nil
 			}
 			if op0 == vm.POP && op1 == vm.POP {
-				return []Instruction{{opcode: POP_POP}}, 1, nil
+				res.appendCode(POP_POP)
+				return 1, nil
 			}
 			if op0 == vm.SWAP2 && op1 == vm.SWAP1 {
-				return []Instruction{{opcode: SWAP2_SWAP1}}, 1, nil
+				res.appendCode(SWAP2_SWAP1)
+				return 1, nil
 			}
 			if op0 == vm.SWAP2 && op1 == vm.POP {
-				return []Instruction{{opcode: SWAP2_POP}}, 1, nil
+				res.appendCode(SWAP2_POP)
+				return 1, nil
 			}
 			if op0 == vm.DUP2 && op1 == vm.MSTORE {
-				return []Instruction{{opcode: DUP2_MSTORE}}, 1, nil
+				res.appendCode(DUP2_MSTORE)
+				return 1, nil
 			}
 			if op0 == vm.DUP2 && op1 == vm.LT {
-				return []Instruction{{opcode: DUP2_LT}}, 1, nil
+				res.appendCode(DUP2_LT)
+				return 1, nil
 			}
 		}
 	}
@@ -212,7 +261,8 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 		if pos > 1<<16 {
 			panic("PC counter exceeding 16 bit limit")
 		}
-		return []Instruction{{opcode: PC, arg: uint16(pos)}}, 0, nil
+		res.appendOp(PC, uint16(pos))
+		return 0, nil
 	}
 
 	if vm.PUSH1 <= opcode && opcode <= vm.PUSH32 {
@@ -222,30 +272,34 @@ func toInstructions(pos int, code []byte, with_super_instructions bool) ([]Instr
 		// If there are not enough bytes left in the code, the instruction is invalid.
 		// It is likely the case that we are in a data segment.
 		if len(code) < pos+n+2 {
-			return []Instruction{{opcode: INVALID}}, 1, nil
+			res.appendCode(INVALID)
+			return 1, nil
 		}
 
 		// Fix the op-codes of the resulting instructions
-		res := make([]Instruction, n/2+n%2)
-		for i := range res {
-			res[i].opcode = DATA
-			res[i].arg = 0
-		}
-		res[0].opcode = PUSH1 + OpCode(n-1)
+		numOps := n/2 + n%2
+		buffer := [16]uint16{} // < using static size to allocate on stack
+		args := buffer[0:numOps]
 
 		// Fix the arguments by packing them in pairs into the instructions.
 		for i := 0; i < n; i += 2 {
-			res[i/2].arg = uint16(code[pos+i+1])<<8 | uint16(code[pos+i+2])
+			args[i/2] = uint16(code[pos+i+1])<<8 | uint16(code[pos+i+2])
 		}
 		if n%2 == 1 {
-			res[n/2].arg = uint16(code[pos+n]) << 8
+			args[n/2] = uint16(code[pos+n]) << 8
 		}
-		return res, n, nil
+
+		// Append encoded operations to result
+		res.appendOp(PUSH1+OpCode(n-1), args[0])
+		for i := 1; i < numOps; i++ {
+			res.appendData(args[i])
+		}
+		return n, nil
 	}
 
 	// All the rest converts to a single instruction.
-	instruction, err := toInstruction(opcode)
-	return []Instruction{instruction}, 0, err
+	res.appendCode(op_2_op[opcode])
+	return 0, nil
 }
 
 var op_2_op = createOpToOpMap()
@@ -412,8 +466,4 @@ func createOpToOpMap() []OpCode {
 	}
 
 	return res
-}
-
-func toInstruction(opcode vm.OpCode) (Instruction, error) {
-	return Instruction{opcode: op_2_op[opcode]}, nil
 }
