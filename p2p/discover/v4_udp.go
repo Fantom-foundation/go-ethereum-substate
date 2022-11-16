@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/discfilter"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -737,6 +738,10 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from *net.UDPAddr, fromID eno
 	for _, n := range closest {
 		// Don't advertise the private nodes
 		if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, &n.Node) {
+			continue
+		}
+		// Don't advertise the bots
+		if discfilter.Banned(n.ID(), n.Record()) {
 			continue
 		}
 		if netutil.CheckRelayIP(from.IP, n.IP()) == nil {

@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/discfilter"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -822,6 +823,10 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 		for _, n := range bn {
 			// Don't advertise the private nodes
 			if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, n) {
+				continue
+			}
+			// Don't advertise the bots
+			if discfilter.Banned(n.ID(), n.Record()) {
 				continue
 			}
 			// TODO livenessChecks > 1
