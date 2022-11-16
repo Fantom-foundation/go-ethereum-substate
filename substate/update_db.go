@@ -5,9 +5,10 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -17,7 +18,7 @@ const (
 
 func SubstateAllocKey(block uint64) []byte {
 	prefix := []byte(SubstateAllocPrefix)
-	blockTx := make([]byte, 16)
+	blockTx := make([]byte, 8)
 	binary.BigEndian.PutUint64(blockTx[0:8], block)
 	return append(prefix, blockTx...)
 }
@@ -55,13 +56,13 @@ func NewUpdateDB(backend BackendDatabase) *UpdateDB {
 }
 
 func OpenUpdateDB(updateSetDir string) *UpdateDB {
-        fmt.Println("record-replay: OpenUpdateSetDB")
-        backend, err := rawdb.NewLevelDBDatabase(updateSetDir, 1024, 100, "updatesetdir", false)
-        if err != nil {
-                panic(fmt.Errorf("error opening update-set leveldb %s: %v", updateSetDir, err))
-        }
-        fmt.Println("record-replay: opened update-set DB successfully")
-        return NewUpdateDB(backend)
+	fmt.Println("record-replay: OpenUpdateSetDB")
+	backend, err := rawdb.NewLevelDBDatabase(updateSetDir, 1024, 100, "updatesetdir", false)
+	if err != nil {
+		panic(fmt.Errorf("error opening update-set leveldb %s: %v", updateSetDir, err))
+	}
+	fmt.Println("record-replay: opened update-set DB successfully")
+	return NewUpdateDB(backend)
 }
 
 func (db *UpdateDB) Compact(start []byte, limit []byte) error {
@@ -157,7 +158,7 @@ func (db *UpdateDB) PutUpdateSet(block uint64, updateSet *SubstateAlloc) {
 	key := SubstateAllocKey(block)
 	defer func() {
 		if err != nil {
-			panic(fmt.Errorf("record-replay: error putting update-set %v into substate DB: %v", block,  err))
+			panic(fmt.Errorf("record-replay: error putting update-set %v into substate DB: %v", block, err))
 		}
 	}()
 
@@ -180,3 +181,137 @@ func (db *UpdateDB) DeleteSubstateAlloc(block uint64) {
 	}
 }
 
+type UpdateBlock struct {
+	Block     uint64
+	UpdateSet *SubstateAlloc
+}
+
+func parseUpdateSet(db *UpdateDB, data rawEntry) *UpdateBlock {
+	key := data.key
+	value := data.value
+
+	block, err := DecodeSubstateAllocKey(data.key)
+	if err != nil {
+		panic(fmt.Errorf("record-replay: invalid update-set key found: %v - issue: %v", key, err))
+	}
+
+	updateSetRLP := SubstateAllocRLP{}
+	rlp.DecodeBytes(value, &updateSetRLP)
+	updateSet := SubstateAlloc{}
+	updateSet.SetUpdateSetRLP(updateSetRLP, db)
+
+	return &UpdateBlock{
+		Block:     block,
+		UpdateSet: &updateSet,
+	}
+}
+
+type UpdateSetIterator struct {
+	db   *UpdateDB
+	iter ethdb.Iterator
+	cur  *UpdateBlock
+
+	// Connections to parsing pipeline
+	source <-chan *UpdateBlock
+	done   chan<- int
+}
+
+func NewUpdateSetIterator(db *UpdateDB, startBlock uint64, workers int) UpdateSetIterator {
+	start := SubstateAllocBlockPrefix(startBlock)
+	iter := db.backend.NewIterator(nil, start)
+
+	// Create channels
+	done := make(chan int)
+	rawData := make([]chan rawEntry, workers)
+	results := make([]chan *UpdateBlock, workers)
+	result := make(chan *UpdateBlock, 10)
+
+	for i := 0; i < workers; i++ {
+		rawData[i] = make(chan rawEntry, 10)
+		results[i] = make(chan *UpdateBlock, 10)
+	}
+
+	// Start iter => raw data stage
+	go func() {
+		defer func() {
+			for _, c := range rawData {
+				close(c)
+			}
+		}()
+		step := 0
+		for {
+			if !iter.Next() {
+				return
+			}
+
+			key := make([]byte, len(iter.Key()))
+			copy(key, iter.Key())
+			value := make([]byte, len(iter.Value()))
+			copy(value, iter.Value())
+
+			res := rawEntry{key, value}
+
+			select {
+			case <-done:
+				return
+			case rawData[step] <- res: // fall-through
+			}
+			step = (step + 1) % workers
+		}
+	}()
+
+	// Start raw data => parsed transaction stage (parallel)
+	for i := 0; i < workers; i++ {
+		id := i
+		go func() {
+			defer close(results[id])
+			for raw := range rawData[id] {
+				results[id] <- parseUpdateSet(db, raw)
+			}
+		}()
+	}
+
+	// Start the go routine moving transactions from parsers to sink in order
+	go func() {
+		defer close(result)
+		step := 0
+		for openProducers := workers; openProducers > 0; {
+			next := <-results[step%workers]
+			if next != nil {
+				result <- next
+			} else {
+				openProducers--
+			}
+			step++
+		}
+	}()
+
+	return UpdateSetIterator{
+		db:     db,
+		iter:   iter,
+		source: result,
+		done:   done,
+	}
+}
+
+func (i *UpdateSetIterator) Release() {
+	close(i.done)
+
+	// drain pipeline until the result channel is closed
+	for open := true; open; _, open = <-i.source {
+	}
+
+	i.iter.Release()
+}
+
+func (i *UpdateSetIterator) Next() bool {
+	if i.iter == nil {
+		return false
+	}
+	i.cur = <-i.source
+	return i.cur != nil
+}
+
+func (i *UpdateSetIterator) Value() *UpdateBlock {
+	return i.cur
+}
