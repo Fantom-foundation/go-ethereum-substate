@@ -1,6 +1,8 @@
 package lfvm
 
 import (
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
 )
@@ -27,12 +29,14 @@ type HashCache struct {
 	index32        map[[32]byte]*hashCacheEntry32
 	head32, tail32 *hashCacheEntry32
 	nextFree32     int
+	lock32         sync.Mutex
 
 	// Hash infrastructure for 64-byte long inputs.
 	entries64      []hashCacheEntry64
 	index64        map[[64]byte]*hashCacheEntry64
 	head64, tail64 *hashCacheEntry64
 	nextFree64     int
+	lock64         sync.Mutex
 
 	// Statistics.
 	hit, miss int
@@ -98,6 +102,8 @@ func (h *HashCache) hash(c *context, data []byte) common.Hash {
 func (h *HashCache) getHash32(c *context, data []byte) common.Hash {
 	var key [32]byte
 	copy(key[:], data)
+	h.lock32.Lock()
+	defer h.lock32.Unlock()
 	entry, found := h.index32[key]
 	if found {
 		h.hit++
@@ -134,6 +140,8 @@ func (h *HashCache) getHash32(c *context, data []byte) common.Hash {
 func (h *HashCache) getHash64(c *context, data []byte) common.Hash {
 	var key [64]byte
 	copy(key[:], data)
+	h.lock64.Lock()
+	defer h.lock64.Unlock()
 	entry, found := h.index64[key]
 	if found {
 		h.hit++
