@@ -7,19 +7,27 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// hashCacheEntry32 is an entry of a cache for hashes of 32-byte long inputs.
 type hashCacheEntry32 struct {
-	key        [32]byte
-	hash       common.Hash
+	// key is the input value cache entries are indexed by.
+	key [32]byte
+	// hash is the cached (Sha3) hash of the key.
+	hash common.Hash
+	// pred/succ pointers are used for a double linked list for the LRU order.
 	pred, succ *hashCacheEntry32
 }
 
+// hashCacheEntry64 is an entry of a cache for hashes of 64-byte long inputs.
 type hashCacheEntry64 struct {
-	key        [64]byte
-	hash       common.Hash
+	// key is the input value cache entries are indexed by.
+	key [64]byte
+	// hash is the cached (Sha3) hash of the key.
+	hash common.Hash
+	// pred/succ pointers are used for a double linked list for the LRU order.
 	pred, succ *hashCacheEntry64
 }
 
-// HashCache is an LRU governed fixed-capacity cache for hash values.
+// HashCache is an LRU governed fixed-capacity cache for SHA3 hashes.
 // The cache maintains hashes for hashed input data of size 32 and 64,
 // which are the vast majority of values hashed when running EVM
 // instructions.
@@ -103,9 +111,7 @@ func (h *HashCache) getHash32(c *context, data []byte) common.Hash {
 	var key [32]byte
 	copy(key[:], data)
 	h.lock32.Lock()
-	defer h.lock32.Unlock()
-	entry, found := h.index32[key]
-	if found {
+	if entry, found := h.index32[key]; found {
 		h.hit++
 		// Move entry to the front.
 		if entry != h.head32 {
@@ -122,13 +128,27 @@ func (h *HashCache) getHash32(c *context, data []byte) common.Hash {
 			h.head32.pred = entry
 			h.head32 = entry
 		}
+		h.lock32.Unlock()
 		return entry.hash
 	}
 	h.miss++
-	// get free slot
-	entry = h.getFree32()
+
+	// Compute the hash without holding the lock.
+	h.lock32.Unlock()
+	hash := getHash(c, data)
+	h.lock32.Lock()
+	defer h.lock32.Unlock()
+
+	// We need to check that the key has not be added concurrently.
+	if _, found := h.index32[key]; found {
+		// If it was added concurrently, we are done.
+		return hash
+	}
+
+	// The key is still not present, so we add it.
+	entry := h.getFree32()
 	entry.key = key
-	entry.hash = getHash(c, data)
+	entry.hash = hash
 	entry.pred = nil
 	entry.succ = h.head32
 	h.head32.pred = entry
@@ -141,9 +161,7 @@ func (h *HashCache) getHash64(c *context, data []byte) common.Hash {
 	var key [64]byte
 	copy(key[:], data)
 	h.lock64.Lock()
-	defer h.lock64.Unlock()
-	entry, found := h.index64[key]
-	if found {
+	if entry, found := h.index64[key]; found {
 		h.hit++
 		// Move entry to the front.
 		if entry != h.head64 {
@@ -160,13 +178,27 @@ func (h *HashCache) getHash64(c *context, data []byte) common.Hash {
 			h.head64.pred = entry
 			h.head64 = entry
 		}
+		h.lock64.Unlock()
 		return entry.hash
 	}
 	h.miss++
-	// get free slot
-	entry = h.getFree64()
+
+	// Compute the hash without holding the lock.
+	h.lock64.Unlock()
+	hash := getHash(c, data)
+	h.lock64.Lock()
+	defer h.lock64.Unlock()
+
+	// We need to check that the key has not be added concurrently.
+	if _, found := h.index64[key]; found {
+		// If it was added concurrently, we are done.
+		return hash
+	}
+
+	// The key is still not present, so we add it.
+	entry := h.getFree64()
 	entry.key = key
-	entry.hash = getHash(c, data)
+	entry.hash = hash
 	entry.pred = nil
 	entry.succ = h.head64
 	h.head64.pred = entry
