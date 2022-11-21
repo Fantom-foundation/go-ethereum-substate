@@ -185,14 +185,14 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 
 func run(c *context) {
 	for c.status == RUNNING {
-
 		if int(c.pc) >= len(c.code) {
 			opStop(c)
 			return
 		}
 
-		for c.code[c.pc].opcode == JUMP_TO {
-			step(c)
+		// JUMP_TO is an LFVM specific operation that has no gas costs.
+		if c.code[c.pc].opcode == JUMP_TO {
+			c.pc = int32(c.code[c.pc].arg)
 		}
 		step(c)
 	}
