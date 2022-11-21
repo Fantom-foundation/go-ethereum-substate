@@ -202,6 +202,9 @@ const (
 	AND_SWAP1_POP_SWAP2_SWAP1
 	PUSH1_PUSH1_PUSH1_SHL_SUB
 
+	// Not really an Op-code but used to get the number of executable opcodes.
+	NUM_EXECUTABLE_OPCODES
+
 	// Special no-instrictions op codes
 	DATA
 	NOOP

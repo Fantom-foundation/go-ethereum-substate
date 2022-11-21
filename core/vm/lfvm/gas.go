@@ -18,12 +18,21 @@ var static_gas_prices_berlin = [NUM_OPCODES]uint64{}
 
 func init() {
 	var gp uint64
-	for i := 0; i < int(NUM_OPCODES); i++ {
+	for i := 0; i < int(NUM_EXECUTABLE_OPCODES); i++ {
 		gp = getStaticGasPriceInternal(OpCode(i))
 		static_gas_prices[i] = gp
 		static_gas_prices_berlin[i] = gp
 	}
 	initBerlinGasPrice()
+
+	for i := 0; i < int(NUM_EXECUTABLE_OPCODES); i++ {
+		if static_gas_prices[i] == UNKNOWN_GAS_PRICE {
+			panic(fmt.Sprintf("Gas price for %v is unkown", OpCode(i)))
+		}
+		if static_gas_prices_berlin[i] == UNKNOWN_GAS_PRICE {
+			panic(fmt.Sprintf("Berlin gas price for %v is unkown", OpCode(i)))
+		}
+	}
 }
 
 func initBerlinGasPrice() {
@@ -41,22 +50,10 @@ func initBerlinGasPrice() {
 }
 
 func getStaticGasPrice(op OpCode, isBerlin bool) uint64 {
-	var res uint64
-	gasPrice := &static_gas_prices
 	if isBerlin {
-		gasPrice = &static_gas_prices_berlin
+		return static_gas_prices_berlin[op]
 	}
-	if int(op) < len(gasPrice) {
-		res = gasPrice[int(op)]
-		if res != UNKNOWN_GAS_PRICE {
-			return res
-		}
-	}
-	res = getStaticGasPriceInternal(op)
-	if res == UNKNOWN_GAS_PRICE {
-		panic(fmt.Sprintf("static gas price for %v unknown", op))
-	}
-	return res
+	return static_gas_prices[op]
 }
 
 func getStaticGasPriceInternal(op OpCode) uint64 {

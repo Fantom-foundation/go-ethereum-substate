@@ -389,6 +389,13 @@ func step(c *context) {
 
 	op := c.code[c.pc].opcode
 
+	// Catch invalid op-codes here, to avoid the need to check them at other places multiple times.
+	if op >= NUM_EXECUTABLE_OPCODES {
+		c.err = vm.ErrInvalidCode
+		c.status = ERROR
+		return
+	}
+
 	// If the interpreter is operating in readonly mode, make sure no
 	// state-modifying operation is performed. The 3rd stack item
 	// for a call operation is the value. Transferring value from one
