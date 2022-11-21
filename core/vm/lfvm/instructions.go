@@ -306,10 +306,9 @@ func opCallDataCopy(c *context) {
 	}
 
 	c.memory.EnsureCapacity(memOffset64, length64, c)
-	if c.status != RUNNING {
-		return
+	if c.status == RUNNING {
+		c.memory.Set(memOffset64, length64, getData(c.data, dataOffset64, length64))
 	}
-	c.memory.Set(memOffset64, length64, getData(c.data, dataOffset64, length64))
 }
 
 func opAnd(c *context) {
@@ -507,6 +506,9 @@ func opSha3(c *context) {
 	offset, size := c.stack.pop(), c.stack.peek()
 
 	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
+	if c.status != RUNNING {
+		return
+	}
 	data := c.memory.GetSlice(offset.Uint64(), size.Uint64())
 
 	// charge dynamic gas price
@@ -650,10 +652,9 @@ func opCodeCopy(c *context) {
 
 	codeCopy := getData(c.contract.Code, uint64CodeOffset, length.Uint64())
 	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
-	if c.status != RUNNING {
-		return
+	if c.status == RUNNING {
+		c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 	}
-	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 }
 
 func opExtcodesize(c *context) {
@@ -723,7 +724,9 @@ func opCreate2(c *context) {
 	)
 
 	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
-
+	if c.status != RUNNING {
+		return
+	}
 	input := c.memory.GetSlice(offset.Uint64(), size.Uint64())
 
 	// Charge for the code size
@@ -801,7 +804,9 @@ func opExtCodeCopy(c *context) {
 	}
 	codeCopy := getData(c.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
 	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
-	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+	if c.status == RUNNING {
+		c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+	}
 
 }
 
@@ -1080,6 +1085,9 @@ func opDelegateCall(c *context) {
 
 	if err == nil || err == vm.ErrExecutionReverted {
 		c.memory.EnsureCapacity(retOffset.Uint64(), retSize.Uint64(), c)
+		if c.status != RUNNING {
+			return
+		}
 		c.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
