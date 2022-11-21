@@ -153,7 +153,9 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		offset := ctxt.result_offset.Uint64()
 		size := ctxt.result_size.Uint64()
 		res = make([]byte, size)
-		ctxt.memory.EnsureCapacity(offset, size, &ctxt)
+		if err := ctxt.memory.EnsureCapacity(offset, size, &ctxt); err != nil {
+			return nil, err
+		}
 		ctxt.memory.CopyData(offset, res[:])
 	}
 

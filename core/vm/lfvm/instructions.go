@@ -167,10 +167,10 @@ func opMstore(c *context) {
 		c.status = ERROR
 		return
 	}
-	c.memory.EnsureCapacity(offset, 32, c)
-	if c.status == RUNNING {
-		c.memory.SetWord(offset, value)
+	if c.memory.EnsureCapacity(offset, 32, c) != nil {
+		return
 	}
+	c.memory.SetWord(offset, value)
 }
 
 func opMstore8(c *context) {
@@ -182,10 +182,10 @@ func opMstore8(c *context) {
 		c.status = ERROR
 		return
 	}
-	c.memory.EnsureCapacity(offset, 1, c)
-	if c.status == RUNNING {
-		c.memory.SetByte(offset, byte(value.Uint64()))
+	if c.memory.EnsureCapacity(offset, 1, c) != nil {
+		return
 	}
+	c.memory.SetByte(offset, byte(value.Uint64()))
 }
 
 func opMload(c *context) {
@@ -193,12 +193,11 @@ func opMload(c *context) {
 	var addr = *trg
 
 	offset := addr.Uint64()
-	c.memory.EnsureCapacity(offset, 32, c)
-
-	//fmt.Printf("MLOAD [%v]\n", addr)
-	if c.status == RUNNING {
-		c.memory.CopyWord(offset, trg)
+	if c.memory.EnsureCapacity(offset, 32, c) != nil {
+		return
 	}
+	//fmt.Printf("MLOAD [%v]\n", addr)
+	c.memory.CopyWord(offset, trg)
 }
 
 func opMsize(c *context) {
@@ -305,10 +304,10 @@ func opCallDataCopy(c *context) {
 		return
 	}
 
-	c.memory.EnsureCapacity(memOffset64, length64, c)
-	if c.status == RUNNING {
-		c.memory.Set(memOffset64, length64, getData(c.data, dataOffset64, length64))
+	if c.memory.EnsureCapacity(memOffset64, length64, c) != nil {
+		return
 	}
+	c.memory.Set(memOffset64, length64, getData(c.data, dataOffset64, length64))
 }
 
 func opAnd(c *context) {
@@ -505,8 +504,7 @@ func opExp(c *context) {
 func opSha3(c *context) {
 	offset, size := c.stack.pop(), c.stack.peek()
 
-	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
-	if c.status != RUNNING {
+	if c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c) != nil {
 		return
 	}
 	data := c.memory.GetSlice(offset.Uint64(), size.Uint64())
@@ -651,10 +649,10 @@ func opCodeCopy(c *context) {
 	}
 
 	codeCopy := getData(c.contract.Code, uint64CodeOffset, length.Uint64())
-	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
-	if c.status == RUNNING {
-		c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+	if c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c) != nil {
+		return
 	}
+	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 }
 
 func opExtcodesize(c *context) {
@@ -723,8 +721,7 @@ func opCreate2(c *context) {
 		salt         = c.stack.pop()
 	)
 
-	c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c)
-	if c.status != RUNNING {
+	if c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c) != nil {
 		return
 	}
 	input := c.memory.GetSlice(offset.Uint64(), size.Uint64())
@@ -803,11 +800,10 @@ func opExtCodeCopy(c *context) {
 		return
 	}
 	codeCopy := getData(c.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
-	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
-	if c.status == RUNNING {
-		c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+	if c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c) != nil {
+		return
 	}
-
+	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 }
 
 func neededMemorySize(offset, size *uint256.Int) uint64 {
@@ -1084,8 +1080,7 @@ func opDelegateCall(c *context) {
 	ret, returnGas, err := c.evm.DelegateCall(c.contract, toAddr, args, gas)
 
 	if err == nil || err == vm.ErrExecutionReverted {
-		c.memory.EnsureCapacity(retOffset.Uint64(), retSize.Uint64(), c)
-		if c.status != RUNNING {
+		if c.memory.EnsureCapacity(retOffset.Uint64(), retSize.Uint64(), c) != nil {
 			return
 		}
 		c.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
@@ -1126,7 +1121,9 @@ func opReturnDataCopy(c *context) {
 		return
 	}
 
-	c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c)
+	if c.memory.EnsureCapacity(memOffset.Uint64(), length.Uint64(), c) != nil {
+		return
+	}
 
 	words := (length.Uint64() + 31) / 32
 	if !c.UseGas(3 * words) {
@@ -1153,8 +1150,7 @@ func opLog(c *context, size int) {
 	// Expand memory if needed
 	start := mStart.Uint64()
 	log_size := mSize.Uint64()
-	c.memory.EnsureCapacity(start, log_size, c)
-	if c.status != RUNNING {
+	if c.memory.EnsureCapacity(start, log_size, c) != nil {
 		return
 	}
 	d := c.memory.GetSlice(start, log_size)
@@ -1242,10 +1238,10 @@ func opDup2_Mstore(c *context) {
 	var addr = c.stack.peek()
 
 	offset := addr.Uint64()
-	c.memory.EnsureCapacity(offset, 32, c)
-	if c.status == RUNNING {
-		c.memory.SetWord(offset, value)
+	if c.memory.EnsureCapacity(offset, 32, c) != nil {
+		return
 	}
+	c.memory.SetWord(offset, value)
 }
 
 func opDup2_Lt(c *context) {
