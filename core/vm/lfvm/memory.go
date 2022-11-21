@@ -3,6 +3,7 @@ package lfvm
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 )
 
@@ -31,20 +32,21 @@ func (m *Memory) ExpansionCosts(size uint64) uint64 {
 	return fee
 }
 
-func (m *Memory) EnsureCapacity(offset, size uint64, c *context) {
+func (m *Memory) EnsureCapacity(offset, size uint64, c *context) error {
 	if size <= 0 {
-		return
+		return nil
 	}
 	needed := offset + size
 	if m.Len() < needed {
 		needed = toValidMemorySize(needed)
 		fee := m.ExpansionCosts(needed)
 		if !c.UseGas(fee) {
-			return
+			return vm.ErrOutOfGas
 		}
 		m.total_memory_cost += fee
 		m.store = append(m.store, make([]byte, needed-m.Len())...)
 	}
+	return nil
 }
 
 func (m *Memory) EnsureCapacityWithoutGas(size uint64, c *context) {
