@@ -7,7 +7,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dropbox/godropbox/container/bitvector"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
@@ -389,6 +388,7 @@ func runWithStatistics(c *context) {
 func step(c *context) {
 
 	op := c.code[c.pc].opcode
+
 	// If the interpreter is operating in readonly mode, make sure no
 	// state-modifying operation is performed. The 3rd stack item
 	// for a call operation is the value. Transferring value from one
@@ -399,8 +399,7 @@ func step(c *context) {
 		c.status = ERROR
 		return
 	}
-	//fmt.Printf("%v\n", c.stack)
-	//fmt.Printf("0x%04x - %5d - %v\n", c.pc, c.contract.Gas, instruction)
+
 	// Consume static gas price for instruction before execution
 	if !c.UseGas(getGasPrice(c, op)) {
 		return
@@ -762,22 +761,34 @@ func getGasPrice(c *context, op OpCode) uint64 {
 	return getStaticGasPrice(op, c.isBerlin)
 }
 
+type OperationSet struct {
+	mask [NUM_OPCODES/64 + 1]uint64
+}
+
+func (s *OperationSet) Add(op OpCode) {
+	s.mask[op/64] = s.mask[op/64] | 1<<op%64
+}
+
+func (s *OperationSet) Contains(op OpCode) bool {
+	return op < NUM_OPCODES && s.mask[op/64]&(1<<op%64) != 0
+}
+
 var writeInts = getWriteInstructionMask()
 
-func getWriteInstructionMask() *bitvector.BitVector {
-	res := bitvector.NewBitVector(make([]byte, NUM_OPCODES/8+1), int(NUM_OPCODES))
-	res.Set(1, int(SSTORE))
-	res.Set(1, int(LOG0))
-	res.Set(1, int(LOG1))
-	res.Set(1, int(LOG2))
-	res.Set(1, int(LOG3))
-	res.Set(1, int(LOG4))
-	res.Set(1, int(CREATE))
-	res.Set(1, int(CREATE2))
-	res.Set(1, int(SELFDESTRUCT))
+func getWriteInstructionMask() OperationSet {
+	res := OperationSet{}
+	res.Add(SSTORE)
+	res.Add(LOG0)
+	res.Add(LOG1)
+	res.Add(LOG2)
+	res.Add(LOG3)
+	res.Add(LOG4)
+	res.Add(CREATE)
+	res.Add(CREATE2)
+	res.Add(SELFDESTRUCT)
 	return res
 }
 
 func isWriteInstruction(opCode OpCode) bool {
-	return opCode < NUM_OPCODES && writeInts.Element(int(opCode)) == 1
+	return writeInts.Contains(opCode)
 }
