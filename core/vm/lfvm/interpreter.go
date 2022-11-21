@@ -771,34 +771,16 @@ func getGasPrice(c *context, op OpCode) uint64 {
 	return getStaticGasPrice(op, c.isBerlin)
 }
 
-type OperationSet struct {
-	mask [NUM_OPCODES/64 + 1]uint64
-}
-
-func (s *OperationSet) Add(op OpCode) {
-	s.mask[op/64] = s.mask[op/64] | 1<<op%64
-}
-
-func (s *OperationSet) Contains(op OpCode) bool {
-	return op < NUM_OPCODES && s.mask[op/64]&(1<<op%64) != 0
-}
-
-var writeInts = getWriteInstructionMask()
-
-func getWriteInstructionMask() OperationSet {
-	res := OperationSet{}
-	res.Add(SSTORE)
-	res.Add(LOG0)
-	res.Add(LOG1)
-	res.Add(LOG2)
-	res.Add(LOG3)
-	res.Add(LOG4)
-	res.Add(CREATE)
-	res.Add(CREATE2)
-	res.Add(SELFDESTRUCT)
-	return res
-}
-
 func isWriteInstruction(opCode OpCode) bool {
-	return writeInts.Contains(opCode)
+	const mask uint32 = 1 | // = 1 << (SSTORE - SSTORE) |
+		1<<(LOG0-SSTORE) |
+		1<<(LOG1-SSTORE) |
+		1<<(LOG2-SSTORE) |
+		1<<(LOG3-SSTORE) |
+		1<<(LOG4-SSTORE) |
+		1<<(CREATE-SSTORE) |
+		1<<(CREATE2-SSTORE) |
+		1<<(SELFDESTRUCT-SSTORE)
+
+	return SSTORE <= opCode && mask&(1<<(opCode-SSTORE)) != 0
 }
