@@ -7,7 +7,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -39,13 +38,12 @@ type context struct {
 	evm *vm.EVM
 
 	// Execution state
-	pc       int32
-	stack    *Stack
-	memory   *Memory
-	stateDB  vm.StateDB
-	status   Status
-	err      error
-	isBerlin bool
+	pc      int32
+	stack   *Stack
+	memory  *Memory
+	stateDB vm.StateDB
+	status  Status
+	err     error
 
 	// Inputs
 	contract *vm.Contract
@@ -53,11 +51,11 @@ type context struct {
 	data     []byte
 	callsize uint256.Int
 	readOnly bool
+	isBerlin bool
 
 	// Intermediate data
 	return_data []byte
 	hasher      keccakState // Keccak256 hasher instance shared across opcodes
-	hasherBuf   common.Hash // Keccak256 hasher result array shared aross opcodes
 
 	// Outputs
 	result_offset uint256.Int
@@ -383,6 +381,8 @@ func stepToEnd(c *context) {
 	steps(c, false)
 }
 func steps(c *context, one_step_only bool) {
+	// Idea: handle static gas price in static dispatch below (saves an array lookup)
+	static_gas_prices := getStaticGasPrices(c.isBerlin)
 	for c.status == RUNNING {
 		if int(c.pc) >= len(c.code) {
 			opStop(c)
@@ -391,7 +391,7 @@ func steps(c *context, one_step_only bool) {
 
 		op := c.code[c.pc].opcode
 
-		// JUMP_TO is an LFVM specific operation that has no gas costs.
+		// JUMP_TO is an LFVM specific operation that has no gas costs nor stack usage.
 		if c.code[c.pc].opcode == JUMP_TO {
 			c.pc = int32(c.code[c.pc].arg)
 			op = c.code[c.pc].opcode
@@ -399,8 +399,7 @@ func steps(c *context, one_step_only bool) {
 
 		// Catch invalid op-codes here, to avoid the need to check them at other places multiple times.
 		if op >= NUM_EXECUTABLE_OPCODES {
-			c.err = vm.ErrInvalidCode
-			c.status = ERROR
+			c.SignalError(vm.ErrInvalidCode)
 			return
 		}
 
@@ -416,7 +415,7 @@ func steps(c *context, one_step_only bool) {
 		}
 
 		// Consume static gas price for instruction before execution
-		if !c.UseGas(getGasPrice(c, op)) {
+		if !c.UseGas(static_gas_prices[op]) {
 			return
 		}
 
@@ -776,11 +775,6 @@ func steps(c *context, one_step_only bool) {
 			return
 		}
 	}
-}
-
-func getGasPrice(c *context, op OpCode) uint64 {
-	// Idea: handle static gas price in static dispatch above (saves an array lookup)
-	return getStaticGasPrice(op, c.isBerlin)
 }
 
 func isWriteInstruction(opCode OpCode) bool {

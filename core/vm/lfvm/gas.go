@@ -49,11 +49,11 @@ func initBerlinGasPrice() {
 	static_gas_prices_berlin[SELFDESTRUCT] = 5000
 }
 
-func getStaticGasPrice(op OpCode, isBerlin bool) uint64 {
+func getStaticGasPrices(isBerlin bool) []uint64 {
 	if isBerlin {
-		return static_gas_prices_berlin[op]
+		return static_gas_prices_berlin[:]
 	}
-	return static_gas_prices[op]
+	return static_gas_prices[:]
 }
 
 func getStaticGasPriceInternal(op OpCode) uint64 {
