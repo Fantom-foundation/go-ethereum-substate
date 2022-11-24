@@ -395,6 +395,10 @@ func (c *Config) TrustedNodes() []*enode.Node {
 	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
 }
 
+func (c *Config) PrivateNodes() []*enode.Node {
+	return c.P2P.PrivateNodes
+}
+
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
 func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
