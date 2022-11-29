@@ -61,7 +61,15 @@ func OpenUpdateDB(updateSetDir string) *UpdateDB {
 	if err != nil {
 		panic(fmt.Errorf("error opening update-set leveldb %s: %v", updateSetDir, err))
 	}
-	fmt.Println("record-replay: opened update-set DB successfully")
+	return NewUpdateDB(backend)
+}
+
+func OpenUpdateDBReadOnly(updateSetDir string) *UpdateDB {
+	fmt.Println("record-replay: OpenUpdateSetDB")
+	backend, err := rawdb.NewLevelDBDatabase(updateSetDir, 1024, 100, "updatesetdir", true)
+	if err != nil {
+		panic(fmt.Errorf("error opening update-set leveldb %s: %v", updateSetDir, err))
+	}
 	return NewUpdateDB(backend)
 }
 
