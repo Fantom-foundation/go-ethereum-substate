@@ -78,6 +78,7 @@ func (x SubstateAlloc) Merge(y SubstateAlloc) {
 			// overwrite account details in x by y
 			x[addr].Nonce = account.Nonce
 			x[addr].Balance = new(big.Int).Set(account.Balance)
+			x[addr].Code = make([]byte, len(account.Code))
 			copy(x[addr].Code, account.Code)
 		} else {
 			// create new account details in x
