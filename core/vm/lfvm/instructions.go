@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -517,10 +518,20 @@ func opSha3(c *context) {
 	if !c.UseGas(price) {
 		return
 	}
+	if c.shaCache {
+		// Cache hashes since identical values are frequently re-hashed.
+		c.hasherBuf = hashCache.hash(c, data)
+	} else {
+		if c.hasher == nil {
+			c.hasher = sha3.NewLegacyKeccak256().(keccakState)
+		} else {
+			c.hasher.Reset()
+		}
+		c.hasher.Write(data)
+		c.hasher.Read(c.hasherBuf[:])
+	}
 
-	// Cache hashes since identical values are frequently re-hashed.
-	hash := hashCache.hash(c, data)
-	size.SetBytes32(hash[:])
+	size.SetBytes32(c.hasherBuf[:])
 }
 
 func opGas(c *context) {
