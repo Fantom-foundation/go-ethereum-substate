@@ -11,6 +11,7 @@ type EVMInterpreter struct {
 	with_shadow_evm         bool
 	with_statistics         bool
 	readOnly                bool
+	no_shaCache             bool
 }
 
 // Registers the long-form EVM as a possible interpreter implementation.
@@ -18,8 +19,14 @@ func init() {
 	vm.RegisterInterpreterFactory("lfvm", func(evm *vm.EVM, cfg vm.Config) vm.EVMInterpreter {
 		return &EVMInterpreter{evm: evm, cfg: cfg}
 	})
+	vm.RegisterInterpreterFactory("lfvm-no-sha-cache", func(evm *vm.EVM, cfg vm.Config) vm.EVMInterpreter {
+		return &EVMInterpreter{evm: evm, cfg: cfg, no_shaCache: true}
+	})
 	vm.RegisterInterpreterFactory("lfvm-si", func(evm *vm.EVM, cfg vm.Config) vm.EVMInterpreter {
 		return &EVMInterpreter{evm: evm, cfg: cfg, with_super_instructions: true}
+	})
+	vm.RegisterInterpreterFactory("lfvm-si-no-sha-cache", func(evm *vm.EVM, cfg vm.Config) vm.EVMInterpreter {
+		return &EVMInterpreter{evm: evm, cfg: cfg, with_super_instructions: true, no_shaCache: true}
 	})
 	vm.RegisterInterpreterFactory("lfvm-dbg", func(evm *vm.EVM, cfg vm.Config) vm.EVMInterpreter {
 		return &EVMInterpreter{evm: evm, cfg: cfg, with_shadow_evm: true}
@@ -45,5 +52,5 @@ func (e *EVMInterpreter) Run(contract *vm.Contract, input []byte, readOnly bool)
 		e.readOnly = true
 		defer func() { e.readOnly = false }()
 	}
-	return Run(e.evm, e.cfg, contract, converted, input, e.readOnly, e.evm.StateDB, e.with_shadow_evm, e.with_statistics)
+	return Run(e.evm, e.cfg, contract, converted, input, e.readOnly, e.evm.StateDB, e.with_shadow_evm, e.with_statistics, e.no_shaCache)
 }
