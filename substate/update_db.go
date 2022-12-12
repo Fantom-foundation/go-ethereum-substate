@@ -224,7 +224,7 @@ type UpdateSetIterator struct {
 	done   chan<- int
 }
 
-func NewUpdateSetIterator(db *UpdateDB, startBlock uint64, workers int) UpdateSetIterator {
+func NewUpdateSetIterator(db *UpdateDB, startBlock, endBlock uint64, workers int) UpdateSetIterator {
 	start := SubstateAllocBlockPrefix(startBlock)
 	iter := db.backend.NewIterator(nil, start)
 
@@ -235,8 +235,8 @@ func NewUpdateSetIterator(db *UpdateDB, startBlock uint64, workers int) UpdateSe
 	result := make(chan *UpdateBlock, 10)
 
 	for i := 0; i < workers; i++ {
-		rawData[i] = make(chan rawEntry, 10)
-		results[i] = make(chan *UpdateBlock, 10)
+		rawData[i] = make(chan rawEntry, 1)
+		results[i] = make(chan *UpdateBlock, 1)
 	}
 
 	// Start iter => raw data stage
@@ -254,6 +254,17 @@ func NewUpdateSetIterator(db *UpdateDB, startBlock uint64, workers int) UpdateSe
 
 			key := make([]byte, len(iter.Key()))
 			copy(key, iter.Key())
+
+			// Decode key, if past the end block, stop here.
+			// This avoids filling channels which huge data objects that are not consumed.
+			block, err := DecodeSubstateAllocKey(key)
+			if err != nil {
+				panic(fmt.Errorf("worldstate-upate: invalid update-set key found: %v - issue: %v", key, err))
+			}
+			if block > endBlock {
+				return
+			}
+
 			value := make([]byte, len(iter.Value()))
 			copy(value, iter.Value())
 
