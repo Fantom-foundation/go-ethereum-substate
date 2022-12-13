@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -52,10 +53,12 @@ type context struct {
 	callsize uint256.Int
 	readOnly bool
 	isBerlin bool
+	shaCache bool
 
 	// Intermediate data
 	return_data []byte
 	hasher      keccakState // Keccak256 hasher instance shared across opcodes
+	hasherBuf   common.Hash
 
 	// Outputs
 	result_offset uint256.Int
@@ -82,7 +85,7 @@ func (c *context) IsShadowed() bool {
 	return c.interpreter != nil
 }
 
-func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []byte, readOnly bool, state vm.StateDB, with_shadow_vm, with_statistics bool) ([]byte, error) {
+func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []byte, readOnly bool, state vm.StateDB, with_shadow_vm, with_statistics bool, no_shaCache bool) ([]byte, error) {
 	if evm.Depth == 0 {
 		ClearShadowValues()
 	}
@@ -131,6 +134,7 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		interpreter: shadow_interpreter,
 		readOnly:    readOnly,
 		isBerlin:    evm.ChainConfig().IsBerlin(evm.Context.BlockNumber),
+		shaCache:    !no_shaCache,
 	}
 	defer func() {
 		ReturnStack(ctxt.stack)
