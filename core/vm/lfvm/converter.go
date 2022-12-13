@@ -149,7 +149,7 @@ func appendInstructions(res *codeBuilder, pos int, code []byte, with_super_instr
 			op6 := vm.OpCode(code[pos+6])
 			op7 := vm.OpCode(code[pos+7])
 			if op0 == vm.PUSH1 && op2 == vm.PUSH4 && op7 == vm.DUP3 {
-				res.appendOp(PUSH1_PUSH4_DUP3, uint16(op1))
+				res.appendOp(PUSH1_PUSH4_DUP3, uint16(op1)<<8)
 				res.appendData(uint16(op3)<<8 | uint16(op4))
 				res.appendData(uint16(op5)<<8 | uint16(op6))
 				return 7
