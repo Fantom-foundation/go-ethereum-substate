@@ -581,8 +581,13 @@ func opSelfbalance(c *context) {
 }
 
 func opBaseFee(c *context) {
-	baseFee, _ := uint256.FromBig(c.evm.Context.BaseFee)
-	c.stack.push(baseFee)
+	if c.isLondon {
+		baseFee, _ := uint256.FromBig(c.evm.Context.BaseFee)
+		c.stack.push(baseFee)
+	} else {
+		c.status = INVALID_INSTRUCTION
+		return
+	}
 }
 
 func opSelfdestruct(c *context) {

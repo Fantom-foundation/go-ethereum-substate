@@ -53,6 +53,7 @@ type context struct {
 	callsize uint256.Int
 	readOnly bool
 	isBerlin bool
+	isLondon bool
 	shaCache bool
 
 	// Intermediate data
@@ -134,6 +135,7 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		interpreter: shadow_interpreter,
 		readOnly:    readOnly,
 		isBerlin:    evm.ChainConfig().IsBerlin(evm.Context.BlockNumber),
+		isLondon:    evm.ChainConfig().IsLondon(evm.Context.BlockNumber),
 		shaCache:    !no_shaCache,
 	}
 	defer func() {
