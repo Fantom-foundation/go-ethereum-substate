@@ -202,6 +202,7 @@ func runWithShadowInterpreter(c *context) {
 
 		for c.code[c.pc].opcode == JUMP_TO {
 			step(c)
+			c.interpreter.Step()
 		}
 		count++
 
