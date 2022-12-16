@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type DestroyedAccountDB struct {
@@ -38,14 +39,24 @@ func (db *DestroyedAccountDB) Close() error {
 	return db.backend.Close()
 }
 
-func (db *DestroyedAccountDB) SetDestroyedAccounts(block uint64, accounts []common.Address) error {
-	return db.backend.Put(encodeDestroyedAccountKey(block), encodeAddressList(accounts))
+type SuicidedAccountLists struct {
+	DestroyedAccounts   []common.Address
+	ResurrectedAccounts []common.Address
 }
 
-func (db *DestroyedAccountDB) GetDestroyedAccounts(block uint64) ([]common.Address, error) {
+func (db *DestroyedAccountDB) SetDestroyedAccounts(block uint64, des []common.Address, res []common.Address) error {
+	accountList := SuicidedAccountLists{DestroyedAccounts: des, ResurrectedAccounts: res}
+	value, err := rlp.EncodeToBytes(accountList)
+	if err != nil {
+		panic(err)
+	}
+	return db.backend.Put(encodeDestroyedAccountKey(block), value)
+}
+
+func (db *DestroyedAccountDB) GetDestroyedAccounts(block uint64) (SuicidedAccountLists, error) {
 	data, err := db.backend.Get(encodeDestroyedAccountKey(block))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	return decodeAddressList(data)
 }
@@ -54,26 +65,38 @@ func (db *DestroyedAccountDB) GetDestroyedAccounts(block uint64) ([]common.Addre
 func (db *DestroyedAccountDB) GetAccountsDestroyedInRange(from, to uint64) ([]common.Address, error) {
 	iter := db.backend.NewIterator(nil, encodeDestroyedAccountKey(from))
 	defer iter.Release()
-	res := []common.Address{}
+	isDestroyed := make(map[common.Address]bool)
 	for iter.Next() {
 		block, err := decodeDestroyedAccountKey(iter.Key())
 		if err != nil {
 			return nil, err
 		}
 		if block > to {
-			return res, nil
+			break
 		}
 		list, err := decodeAddressList(iter.Value())
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, list...)
+		for _, addr := range list.DestroyedAccounts {
+			isDestroyed[addr] = true
+		}
+		for _, addr := range list.ResurrectedAccounts {
+			isDestroyed[addr] = false
+		}
 	}
-	return res, nil
+
+	accountList := []common.Address{}
+	for addr, isDeleted := range isDestroyed {
+		if isDeleted {
+			accountList = append(accountList, addr)
+		}
+	}
+	return accountList, nil
 }
 
 const (
-	destroyedAccountPrefix = "da" // destroyedAccountPrefix + block (64-bit) -> []common.Address
+	destroyedAccountPrefix = "da" // destroyedAccountPrefix + block (64-bit) -> SuicidedAccountLists
 )
 
 func encodeDestroyedAccountKey(block uint64) []byte {
@@ -91,28 +114,11 @@ func decodeDestroyedAccountKey(data []byte) (uint64, error) {
 	if string(data[0:len(destroyedAccountPrefix)]) != destroyedAccountPrefix {
 		return 0, fmt.Errorf("invalid prefix of destroyed account key")
 	}
-	return binary.BigEndian.Uint64(data[2:]), nil
+	return binary.BigEndian.Uint64(data[len(destroyedAccountPrefix):]), nil
 }
 
-func encodeAddressList(list []common.Address) []byte {
-	res := make([]byte, len(list)*common.AddressLength)
-	for i := range list {
-		copy(res[i*common.AddressLength:], list[i][:])
-	}
-	return res
-}
-
-func decodeAddressList(data []byte) ([]common.Address, error) {
-	if len(data) == 0 {
-		return nil, nil
-	}
-	if len(data)%common.AddressLength != 0 {
-		return nil, fmt.Errorf("invalid lenght of address list encoding: %d", len(data))
-	}
-	numAddresses := len(data) / common.AddressLength
-	res := make([]common.Address, numAddresses)
-	for i := 0; i < numAddresses; i++ {
-		copy(res[i][:], data[i*common.AddressLength:])
-	}
-	return res, nil
+func decodeAddressList(data []byte) (SuicidedAccountLists, error) {
+	list := SuicidedAccountLists{}
+	err := rlp.DecodeBytes(data, &list)
+	return list, err
 }
