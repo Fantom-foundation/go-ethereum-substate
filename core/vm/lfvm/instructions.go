@@ -819,11 +819,15 @@ func opExtCodeCopy(c *context) {
 	c.memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 }
 
-func neededMemorySize(offset, size *uint256.Int) uint64 {
-	if size.IsZero() {
-		return 0
+func neededMemorySize(c *context, offset, size *uint256.Int) (uint64, error) {
+	if !size.IsUint64() {
+		c.status = ERROR
+		return 0, vm.ErrGasUintOverflow
 	}
-	return offset.Uint64() + size.Uint64()
+	if size.IsZero() {
+		return 0, nil
+	}
+	return offset.Uint64() + size.Uint64(), nil
 }
 
 func opCall(c *context) {
@@ -836,8 +840,14 @@ func opCall(c *context) {
 	provided_gas, addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	// Compute and charge gas price for call
-	arg_memory_size := neededMemorySize(inOffset, inSize)
-	ret_memory_size := neededMemorySize(retOffset, retSize)
+	arg_memory_size, err := neededMemorySize(c, inOffset, inSize)
+	if err != nil {
+		return
+	}
+	ret_memory_size, err := neededMemorySize(c, retOffset, retSize)
+	if err != nil {
+		return
+	}
 	needed_memory_size := arg_memory_size
 	if ret_memory_size > arg_memory_size {
 		needed_memory_size = ret_memory_size
@@ -919,8 +929,14 @@ func opCallCode(c *context) {
 	provided_gas, addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	// Compute and charge gas price for call
-	arg_memory_size := neededMemorySize(inOffset, inSize)
-	ret_memory_size := neededMemorySize(retOffset, retSize)
+	arg_memory_size, err := neededMemorySize(c, inOffset, inSize)
+	if err != nil {
+		return
+	}
+	ret_memory_size, err := neededMemorySize(c, retOffset, retSize)
+	if err != nil {
+		return
+	}
 	needed_memory_size := arg_memory_size
 	if ret_memory_size > arg_memory_size {
 		needed_memory_size = ret_memory_size
@@ -1004,8 +1020,14 @@ func opStaticCall(c *context) {
 	provided_gas, addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	// Compute and charge gas price for call
-	arg_memory_size := neededMemorySize(inOffset, inSize)
-	ret_memory_size := neededMemorySize(retOffset, retSize)
+	arg_memory_size, err := neededMemorySize(c, inOffset, inSize)
+	if err != nil {
+		return
+	}
+	ret_memory_size, err := neededMemorySize(c, retOffset, retSize)
+	if err != nil {
+		return
+	}
 	needed_memory_size := arg_memory_size
 	if ret_memory_size > arg_memory_size {
 		needed_memory_size = ret_memory_size
@@ -1062,8 +1084,14 @@ func opDelegateCall(c *context) {
 	provided_gas, addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	// Compute and charge gas price for call
-	arg_memory_size := neededMemorySize(inOffset, inSize)
-	ret_memory_size := neededMemorySize(retOffset, retSize)
+	arg_memory_size, err := neededMemorySize(c, inOffset, inSize)
+	if err != nil {
+		return
+	}
+	ret_memory_size, err := neededMemorySize(c, retOffset, retSize)
+	if err != nil {
+		return
+	}
 	needed_memory_size := arg_memory_size
 	if ret_memory_size > arg_memory_size {
 		needed_memory_size = ret_memory_size
