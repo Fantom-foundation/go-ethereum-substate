@@ -697,8 +697,13 @@ func opCreate(c *context) {
 		value        = c.stack.pop()
 		offset, size = c.stack.pop(), c.stack.pop()
 		input        = c.memory.GetSlice(offset.Uint64(), size.Uint64())
-		gas          = c.contract.Gas
 	)
+
+	if c.memory.EnsureCapacity(offset.Uint64(), size.Uint64(), c) != nil {
+		return
+	}
+
+	gas := c.contract.Gas
 	if true /*c.evm.chainRules.IsEIP150*/ {
 		gas -= gas / 64
 	}
