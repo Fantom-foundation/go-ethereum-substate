@@ -22,6 +22,7 @@ type cache_val struct {
 var changedAddress01 = common.HexToAddress("0xA7CC236F81b04c1058e9bfb70E0Ee9940e271676")
 var changedAddress02 = common.HexToAddress("0xAD0FB83a110c3694faDa81e8B396716a610c4030")
 var changedAddress03 = common.HexToAddress("0xA8B3C9f298877dD93F30E8Ed359956faE10E8797")
+var changedAddress04 = common.HexToAddress("0x6DBd5d37397afF80BE434F74cc89b9d933635784")
 
 var mu = sync.Mutex{}
 var cache = map[cache_key]cache_val{}
@@ -38,7 +39,7 @@ func Convert(addr common.Address, code []byte, with_super_instructions bool, blk
 	res, exists := cache[key]
 	if exists && !create {
 		isEqual := true
-		if addr == changedAddress01 || addr == changedAddress02 || addr == changedAddress03 {
+		if addr == changedAddress01 || addr == changedAddress02 || addr == changedAddress03 || addr == changedAddress04 {
 			// fmt.Println("Address: ", addr.String(), " blk: ", blk)
 
 			for i, v := range res.oldCode {
@@ -261,7 +262,8 @@ func appendInstructions(res *codeBuilder, pos int, code []byte, with_super_instr
 
 	if opcode == vm.PC {
 		if pos > 1<<16 {
-			panic("PC counter exceeding 16 bit limit")
+			res.appendCode(INVALID)
+			return 1
 		}
 		res.appendOp(PC, uint16(pos))
 		return 0
@@ -271,15 +273,26 @@ func appendInstructions(res *codeBuilder, pos int, code []byte, with_super_instr
 		// Determine the number of bytes to be pushed.
 		n := int(opcode) - int(vm.PUSH1) + 1
 
-		// If there are not enough bytes left in the code, the instruction is invalid.
-		// It is likely the case that we are in a data segment.
+		var data []byte
+		// If there are not enough bytes left in the code, rest is filled with 0
+		// zeros are padded right
 		if len(code) < pos+n+2 {
-			res.appendCode(INVALID)
-			return 1
+			ext := (pos + n + 2 - len(code)) / 2
+			if (pos+n+2-len(code))%2 > 0 {
+				ext++
+			}
+			if ext > 0 {
+				ins := make([]Instruction, len(res.code)+ext)
+				copy(ins, res.code[:])
+				res.code = ins
+			}
+			data = make([]byte, n+1)
+			copy(data, code[pos+1:])
+		} else {
+			data = code[pos+1 : pos+1+n]
 		}
 
 		// Fix the op-codes of the resulting instructions
-		data := code[pos+1 : pos+1+n]
 		if n == 1 {
 			res.appendOp(PUSH1, uint16(data[0])<<8)
 		} else {
