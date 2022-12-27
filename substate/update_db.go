@@ -11,6 +11,20 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type UpdateSetRLP struct {
+	SubstateAlloc   SubstateAllocRLP
+	DeletedAccounts []common.Address
+}
+
+func NewUpdateSetRLP(updateset SubstateAlloc, deletedAccounts []common.Address) UpdateSetRLP {
+	var rlp UpdateSetRLP
+
+	rlp.SubstateAlloc = NewSubstateAllocRLP(updateset)
+	rlp.DeletedAccounts = deletedAccounts
+	return rlp
+
+}
+
 const (
 	SubstateAllocPrefix     = "2s" // SubstateAllocPrefix + block (64-bit) + tx (64-bit) -> substateRLP
 	SubstateAllocCodePrefix = "2c" // SubstateAllocCodePrefix + codeHash (256-bit) -> code
@@ -149,14 +163,14 @@ func (db *UpdateDB) GetUpdateSet(block uint64) *SubstateAlloc {
 		panic(fmt.Errorf("record-replay: error getting substate %v from substate DB: %v,", block, err))
 	}
 	// try decoding as substates from latest hard forks
-	updateSetRLP := SubstateAllocRLP{}
+	updateSetRLP := UpdateSetRLP{}
 	err = rlp.DecodeBytes(value, &updateSetRLP)
 	updateSet := SubstateAlloc{}
-	updateSet.SetUpdateSetRLP(updateSetRLP, db)
+	updateSet.SetUpdateSetRLP(updateSetRLP.SubstateAlloc, db)
 	return &updateSet
 }
 
-func (db *UpdateDB) PutUpdateSet(block uint64, updateSet *SubstateAlloc) {
+func (db *UpdateDB) PutUpdateSet(block uint64, updateSet *SubstateAlloc, deletedAccounts []common.Address) {
 	var err error
 
 	// put deployed/creation code
@@ -170,7 +184,8 @@ func (db *UpdateDB) PutUpdateSet(block uint64, updateSet *SubstateAlloc) {
 		}
 	}()
 
-	updateSetRLP := NewSubstateAllocRLP(*updateSet)
+	updateSetRLP := NewUpdateSetRLP(*updateSet, deletedAccounts)
+
 	value, err := rlp.EncodeToBytes(updateSetRLP)
 	if err != nil {
 		panic(err)
@@ -190,8 +205,9 @@ func (db *UpdateDB) DeleteSubstateAlloc(block uint64) {
 }
 
 type UpdateBlock struct {
-	Block     uint64
-	UpdateSet *SubstateAlloc
+	Block           uint64
+	UpdateSet       *SubstateAlloc
+	DeletedAccounts []common.Address
 }
 
 func parseUpdateSet(db *UpdateDB, data rawEntry) *UpdateBlock {
@@ -203,14 +219,15 @@ func parseUpdateSet(db *UpdateDB, data rawEntry) *UpdateBlock {
 		panic(fmt.Errorf("record-replay: invalid update-set key found: %v - issue: %v", key, err))
 	}
 
-	updateSetRLP := SubstateAllocRLP{}
+	updateSetRLP := UpdateSetRLP{}
 	rlp.DecodeBytes(value, &updateSetRLP)
 	updateSet := SubstateAlloc{}
-	updateSet.SetUpdateSetRLP(updateSetRLP, db)
+	updateSet.SetUpdateSetRLP(updateSetRLP.SubstateAlloc, db)
 
 	return &UpdateBlock{
-		Block:     block,
-		UpdateSet: &updateSet,
+		Block:           block,
+		UpdateSet:       &updateSet,
+		DeletedAccounts: updateSetRLP.DeletedAccounts,
 	}
 }
 
