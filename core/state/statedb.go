@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/substate"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -111,6 +112,11 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+
+	// record-replay: SubstatePreAlloc, SubstatePostAlloc, SubstateBlockHashes of StateDB
+	SubstatePreAlloc    substate.SubstateAlloc
+	SubstatePostAlloc   substate.SubstateAlloc
+	SubstateBlockHashes map[uint64]common.Hash
 }
 
 // New creates a new state from a given trie.
@@ -137,6 +143,12 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 			sdb.snapStorage = make(map[common.Hash]map[common.Hash][]byte)
 		}
 	}
+
+	// init StateDB.Substate*
+	sdb.SubstatePreAlloc = make(substate.SubstateAlloc)
+	sdb.SubstatePostAlloc = make(substate.SubstateAlloc)
+	sdb.SubstateBlockHashes = make(map[uint64]common.Hash)
+
 	return sdb, nil
 }
 
@@ -402,6 +414,13 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
+func (s *StateDB) SetPrehashedCode(addr common.Address, hash common.Hash, code []byte) {
+	stateObject := s.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCode(hash, code)
+	}
+}
+
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	stateObject := s.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -487,7 +506,16 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 // to differentiate between non-existent/just-deleted, use getDeletedStateObject.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
-		return obj
+		// insert the account in StateDB.SubstatePreAlloc
+		if _, exist := s.SubstatePreAlloc[addr]; !exist {
+			s.SubstatePreAlloc[addr] = substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+		}
+ 		return obj
+ 	}
+	// insert empty account in StateDB.SubstatePreAlloc
+	// This will prevent insertion of new account created in txs
+	if _, exist := s.SubstatePreAlloc[addr]; !exist {
+		s.SubstatePreAlloc[addr] = nil
 	}
 	return nil
 }
@@ -697,6 +725,21 @@ func (s *StateDB) Copy() *StateDB {
 	for hash, preimage := range s.preimages {
 		state.preimages[hash] = preimage
 	}
+
+	// copy StateDB.Substate*
+	state.SubstatePreAlloc = make(substate.SubstateAlloc)
+	state.SubstatePostAlloc = make(substate.SubstateAlloc)
+	state.SubstateBlockHashes = make(map[uint64]common.Hash)
+	for addr, account := range s.SubstatePreAlloc {
+		state.SubstatePreAlloc[addr] = account.Copy()
+	}
+	for addr, account := range s.SubstatePostAlloc {
+		state.SubstatePostAlloc[addr] = account.Copy()
+	}
+	for num64, bhash := range s.SubstateBlockHashes {
+		state.SubstateBlockHashes[num64] = bhash
+	}
+
 	return state
 }
 
@@ -733,6 +776,19 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+	// copy original storage values to Prestate and Poststate
+	for addr, sa := range s.SubstatePreAlloc {
+		if sa == nil {
+			delete(s.SubstatePreAlloc, addr)
+			continue
+		}
+
+		obj := s.stateObjects[addr]
+		for key := range obj.AccessedStorage {
+			sa.Storage[key] = obj.GetCommittedState(s.db, key)
+		}
+		s.SubstatePostAlloc[addr] = sa.Copy()
+	}
 	for addr := range s.journal.dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
@@ -756,7 +812,15 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
+			// delete account from StateDB.SubstatePostAlloc
+			delete(s.SubstatePostAlloc, addr)
 		} else {
+			// copy dirty account to StateDB.SubstatePostAlloc
+			sa := substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+			for key := range obj.AccessedStorage {
+				sa.Storage[key] = obj.GetState(s.db, key)
+			}
+			s.SubstatePostAlloc[addr] = sa
 			obj.finalise()
 		}
 		s.stateObjectsPending[addr] = struct{}{}
@@ -798,6 +862,15 @@ func (s *StateDB) Prepare(thash, bhash common.Hash, ti int) {
 	s.thash = thash
 	s.bhash = bhash
 	s.txIndex = ti
+
+	// reset StateDB.Substate* and stateObject.Substate*
+	s.SubstatePreAlloc = make(substate.SubstateAlloc)
+	s.SubstatePostAlloc = make(substate.SubstateAlloc)
+	s.SubstateBlockHashes = make(map[uint64]common.Hash)
+	for _, obj := range s.stateObjects {
+		obj.AccessedStorage = make(map[common.Hash]struct{})
+	}
+
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -876,4 +949,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
 	return root, err
+}
+
+func (s *StateDB) GetSubstatePostAlloc() substate.SubstateAlloc {
+	return s.SubstatePostAlloc
 }
