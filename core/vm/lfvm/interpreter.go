@@ -387,6 +387,22 @@ func step(c *context) {
 func stepToEnd(c *context) {
 	steps(c, false)
 }
+
+func checkStackBoundry(c *context, op OpCode) error {
+	stackLen := c.stack.len()
+	if stackLen < staticStackBoundry[op].stackMin {
+		c.err = &vm.ErrStackUnderflow{}
+		c.status = ERROR
+		return c.err
+	}
+	if stackLen > int(params.StackLimit)-1 && stackLen > staticStackBoundry[op].stackMax {
+		c.err = &vm.ErrStackOverflow{}
+		c.status = ERROR
+		return c.err
+	}
+	return nil
+}
+
 func steps(c *context, one_step_only bool) {
 	// Idea: handle static gas price in static dispatch below (saves an array lookup)
 	static_gas_prices := getStaticGasPrices(c.isBerlin)
@@ -410,6 +426,11 @@ func steps(c *context, one_step_only bool) {
 			return
 		}
 
+		// Need to check Call stack boundry before using static gas
+		if op == CALL && checkStackBoundry(c, op) != nil {
+			return
+		}
+
 		// If the interpreter is operating in readonly mode, make sure no
 		// state-modifying operation is performed. The 3rd stack item
 		// for a call operation is the value. Transferring value from one
@@ -426,15 +447,8 @@ func steps(c *context, one_step_only bool) {
 			return
 		}
 
-		stackLen := c.stack.len()
-		if stackLen < staticStackBoundry[op].stackMin {
-			c.err = &vm.ErrStackUnderflow{}
-			c.status = ERROR
-			return
-		}
-		if stackLen > int(params.StackLimit)-1 && stackLen > staticStackBoundry[op].stackMax {
-			c.err = &vm.ErrStackOverflow{}
-			c.status = ERROR
+		// Check stack boundry for every instruction
+		if checkStackBoundry(c, op) != nil {
 			return
 		}
 
