@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 )
@@ -18,6 +19,52 @@ type example struct {
 	function uint32 // The identifier of the function in the contract to be called
 }
 
+func getContext() context {
+
+	// Create a dummy contract
+	addr := vm.AccountRef{}
+	contract := vm.NewContract(addr, addr, big.NewInt(0), 1<<63)
+
+	var exampleCode = []byte{
+		byte(vm.PUSH4), 4}
+	clearConversionCache()
+	code, _ := Convert(common.Address{}, exampleCode, false, 0, false)
+	data := make([]byte, 4+32)
+
+	// Create execution context.
+	return context{
+		code:     code,
+		data:     data,
+		callsize: *uint256.NewInt(uint64(len(data))),
+		stack:    NewStack(),
+		memory:   NewMemory(),
+		readOnly: true,
+		contract: contract,
+	}
+}
+
+// Test UseGas function and correct status after running out of gas
+func TestGasFunc(t *testing.T) {
+	ctx := getContext()
+	ctx.contract.Gas = 100
+	ok := ctx.UseGas(10)
+	if !ok {
+		t.Errorf("expected not failed useGas function, got failed")
+	}
+	if ctx.contract.Gas != 90 {
+		t.Errorf("expected gas of contract in context is 90, got %d", ctx.contract.Gas)
+	}
+	ok = ctx.UseGas(100)
+	if ok {
+		t.Errorf("expected failed useGas function, got ok")
+	}
+	if ctx.contract.Gas != 90 {
+		t.Errorf("expected gas of contract in context is 90 also after failing, got %d", ctx.contract.Gas)
+	}
+	if ctx.status != OUT_OF_GAS {
+		t.Errorf("expected OUT_OF_GAS status 6, got %d", ctx.status)
+	}
+}
 func getFibExample() example {
 	// An implementation of the fib function in EVM byte code.
 	code, err := hex.DecodeString("608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f9b7c7e514610030575b600080fd5b61004a600480360381019061004591906100f6565b610060565b6040516100579190610132565b60405180910390f35b600060018263ffffffff161161007957600190506100b0565b61008e600283610089919061017c565b610060565b6100a360018461009e919061017c565b610060565b6100ad91906101b4565b90505b919050565b600080fd5b600063ffffffff82169050919050565b6100d3816100ba565b81146100de57600080fd5b50565b6000813590506100f0816100ca565b92915050565b60006020828403121561010c5761010b6100b5565b5b600061011a848285016100e1565b91505092915050565b61012c816100ba565b82525050565b60006020820190506101476000830184610123565b92915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b6000610187826100ba565b9150610192836100ba565b9250828203905063ffffffff8111156101ae576101ad61014d565b5b92915050565b60006101bf826100ba565b91506101ca836100ba565b9250828201905063ffffffff8111156101e6576101e561014d565b5b9291505056fea26469706673582212207fd33e47e97ce5871bb05401e6710238af535ae8aeaab013ca9a9c29152b8a1b64736f6c637827302e382e31372d646576656c6f702e323032322e382e392b636f6d6d69742e62623161386466390058")
