@@ -173,8 +173,73 @@ func TestStackBoundry(t *testing.T) {
 		// Check the result.
 		if ctxt.status != test.endStatus {
 			t.Errorf("execution failed %v: status is %v, wanted %v, error %v", test.name, ctxt.status, test.endStatus, ctxt.err)
+		} else {
+			t.Log("Success", test.name)
 		}
-		t.Log("Success", test.name)
+
+	}
+}
+
+var opcodeTests = []OpcodeTest{
+	{"POP OK", []Instruction{{PUSH1, 1}, {POP, 0}}, false, 0, STOPPED, false, false},
+}
+
+func addOKOpCodes(tests []OpcodeTest) []OpcodeTest {
+	var addedTests []OpcodeTest
+	addedTests = append(addedTests, tests...)
+	for i := PUSH1; i <= PUSH32; i++ {
+		code := []Instruction{{i, 1}}
+		dataNum := int((i - PUSH1) / 2)
+		for j := 0; j < dataNum; j++ {
+			code = append(code, Instruction{DATA, 1})
+		}
+		addedTests = append(addedTests, OpcodeTest{i.String() + " execution", code, false, 0, STOPPED, false, false})
+	}
+	var opCodes []OpCode
+	opCodes = append(opCodes, getInstructions(DUP1, SWAP16)...)
+	for _, opCode := range opCodes {
+		code := []Instruction{{opCode, 1}}
+		addedTests = append(addedTests, OpcodeTest{opCode.String() + " execution", code, false, 0, STOPPED, false, false})
+	}
+	return addedTests
+}
+
+func TestOK(t *testing.T) {
+
+	// Create a dummy contract
+	addr := vm.AccountRef{}
+	contract := vm.NewContract(addr, addr, big.NewInt(0), 1<<63)
+
+	tests := addOKOpCodes(opcodeTests)
+
+	for _, test := range tests {
+
+		// Create execution context.
+		ctxt := context{
+			code:     test.code,
+			data:     nil,
+			callsize: *uint256.NewInt(uint64(0)),
+			stack:    NewStack(),
+			memory:   NewMemory(),
+			readOnly: true,
+			contract: contract,
+		}
+
+		// Reset the context.
+		ctxt.pc = 0
+		ctxt.status = RUNNING
+		ctxt.contract.Gas = 1 << 31
+		ctxt.stack.stack_ptr = 20
+
+		// Run testing code
+		run(&ctxt)
+
+		// Check the result.
+		if ctxt.status != test.endStatus {
+			t.Errorf("execution failed %v: status is %v, wanted %v, error %v", test.name, ctxt.status, test.endStatus, ctxt.err)
+		} else {
+			t.Log("Success", test.name)
+		}
 	}
 }
 
