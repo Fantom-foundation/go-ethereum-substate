@@ -184,7 +184,12 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		return nil, fmt.Errorf("unspecified error in interpreter")
 	}
 
-	panic(fmt.Sprintf("unknown interpreter status: %d", ctxt.status))
+	if ctxt.err != nil {
+		ctxt.status = ERROR
+		return nil, fmt.Errorf("unknown interpreter status %d with error %v", ctxt.status, ctxt.err)
+	} else {
+		return nil, fmt.Errorf("unknown interpreter status %d", ctxt.status)
+	}
 }
 
 func run(c *context) {
@@ -671,7 +676,8 @@ func steps(c *context, one_step_only bool) {
 		case NOOP:
 			opNoop(c)
 		case DATA:
-			panic("can not interpret data as instruction")
+			c.status = INVALID_INSTRUCTION
+			return
 		case INVALID:
 			opInvalid(c)
 		case SLOAD:
@@ -788,7 +794,8 @@ func steps(c *context, one_step_only bool) {
 		case PUSH1_PUSH1_PUSH1_SHL_SUB:
 			opPush1_Push1_Push1_Shl_Sub(c)
 		default:
-			panic(fmt.Sprintf("Unsupported operation: %v", op))
+			c.status = INVALID_INSTRUCTION
+			return
 		}
 		c.pc++
 
