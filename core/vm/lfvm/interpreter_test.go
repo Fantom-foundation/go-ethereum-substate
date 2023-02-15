@@ -167,6 +167,33 @@ func addEmptyStackFailOpCodes(tests []OpcodeTest) []OpcodeTest {
 	}
 	return addedTests
 }
+func TestContainsAllMaxStackBoundryInstructions(t *testing.T) {
+	set := make(map[OpCode]bool)
+	fullStackFailOpcodes := addFullStackFailOpCodes(nil)
+	for _, op := range fullStackFailOpcodes {
+		set[op.code[0].opcode] = true
+	}
+	for op := OpCode(0); op < NUM_OPCODES; op++ {
+		insStack := getStaticStackInternal(op)
+		if _, exists := set[op]; exists != (MAX_STACK_SIZE-insStack.stackMax > 0) {
+			t.Errorf("OpCode %v adding %v to stack, is not contained in FullStackFailOpCodes", op.String(), MAX_STACK_SIZE-insStack.stackMax)
+		}
+	}
+}
+
+func TestContainsAllMinStackBoundryInstructions(t *testing.T) {
+	set := make(map[OpCode]bool)
+	emptyStackFailOpcodes := addEmptyStackFailOpCodes(nil)
+	for _, op := range emptyStackFailOpcodes {
+		set[op.code[0].opcode] = true
+	}
+	for op := OpCode(0); op < NUM_OPCODES; op++ {
+		insStack := getStaticStackInternal(op)
+		if _, exists := set[op]; exists != (insStack.stackMin > 0) {
+			t.Errorf("OpCode %v with minimum stack size of %v values, is not contained in EmptyStackFailOpcodes", op.String(), insStack.stackMin)
+		}
+	}
+}
 
 func TestStackBoundry(t *testing.T) {
 
