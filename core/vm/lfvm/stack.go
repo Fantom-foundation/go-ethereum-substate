@@ -158,13 +158,13 @@ func getStaticStackInternal(op OpCode) InstructionStack {
 	case EXTCODECOPY:
 		return newInstructionStack(4, 0, 0)
 	case CREATE:
-		return newInstructionStack(3, 1, 1)
+		return newInstructionStack(3, 0, 1)
 	case CREATE2:
-		return newInstructionStack(4, 1, 1)
+		return newInstructionStack(4, 0, 1)
 	case CALL, CALLCODE:
-		return newInstructionStack(7, 1, 1)
+		return newInstructionStack(7, 0, 1)
 	case STATICCALL, DELEGATECALL:
-		return newInstructionStack(6, 1, 1)
+		return newInstructionStack(6, 0, 1)
 	case PUSH1_DUP1, PUSH1_PUSH1:
 		return newInstructionStack(0, 2, 2)
 	case SWAP2_SWAP1:
