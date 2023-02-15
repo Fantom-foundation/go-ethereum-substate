@@ -149,7 +149,7 @@ func addFullStackFailOpCodes(tests []OpcodeTest) []OpcodeTest {
 	opCodes = append(opCodes, getInstructions(PUSH1, PUSH32)...)
 	opCodes = append(opCodes, getInstructions(DUP1, DUP16)...)
 	for _, opCode := range opCodes {
-		addedTests = append(addedTests, OpcodeTest{opCode.String() + " Stack overflow", []Instruction{{opCode, 1}}, MAX_STACK_SIZE, 0, ERROR, false, false, nil, GAS_START, 0})
+		addedTests = append(addedTests, OpcodeTest{opCode.String(), []Instruction{{opCode, 1}}, MAX_STACK_SIZE, 0, ERROR, false, false, nil, GAS_START, 0})
 	}
 	return addedTests
 }
@@ -163,7 +163,7 @@ func addEmptyStackFailOpCodes(tests []OpcodeTest) []OpcodeTest {
 	opCodes = append(opCodes, getInstructions(SWAP1, SWAP16)...)
 	opCodes = append(opCodes, getInstructions(LOG0, LOG4)...)
 	for _, opCode := range opCodes {
-		addedTests = append(addedTests, OpcodeTest{opCode.String() + " Stack underflow", []Instruction{{opCode, 1}}, 0, 0, ERROR, false, false, nil, GAS_START, 0})
+		addedTests = append(addedTests, OpcodeTest{opCode.String(), []Instruction{{opCode, 1}}, 0, 0, ERROR, false, false, nil, GAS_START, 0})
 	}
 	return addedTests
 }
@@ -195,13 +195,10 @@ func TestContainsAllMinStackBoundryInstructions(t *testing.T) {
 	}
 }
 
-func TestStackBoundry(t *testing.T) {
+func TestStackMinBoundry(t *testing.T) {
 
 	// Add tests for execution
-	tests := addFullStackFailOpCodes([]OpcodeTest{})
-	tests = addEmptyStackFailOpCodes(tests)
-
-	for _, test := range tests {
+	for _, test := range addEmptyStackFailOpCodes(nil) {
 
 		// Create execution context.
 		ctxt := getEmptyContext()
@@ -217,7 +214,28 @@ func TestStackBoundry(t *testing.T) {
 		} else {
 			t.Log("Success", test.name)
 		}
+	}
+}
 
+func TestStackMaxBoundry(t *testing.T) {
+
+	// Add tests for execution
+	for _, test := range addFullStackFailOpCodes(nil) {
+
+		// Create execution context.
+		ctxt := getEmptyContext()
+		ctxt.code = test.code
+		ctxt.stack.stack_ptr = test.stackPtrPos
+
+		// Run testing code
+		run(&ctxt)
+
+		// Check the result.
+		if ctxt.status != test.endStatus {
+			t.Errorf("execution failed %v: status is %v, wanted %v, error %v", test.name, ctxt.status, test.endStatus, ctxt.err)
+		} else {
+			t.Log("Success", test.name)
+		}
 	}
 }
 
