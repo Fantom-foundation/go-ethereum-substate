@@ -240,90 +240,90 @@ func TestStackMaxBoundry(t *testing.T) {
 }
 
 var opcodeTests = []OpcodeTest{
-	{"POP OK", []Instruction{{PUSH1, 1 << 8}, {POP, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 5},
-	{"JUMP OK", []Instruction{{PUSH1, 2 << 8}, {JUMP, 0}, {JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 12},
-	{"JUMPI OK", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 3 << 8}, {JUMPI, 0}, {JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 17},
-	{"JUMPDEST OK", []Instruction{{JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 1},
-	{"RETURN OK", []Instruction{{RETURN, 0}}, 20, 0, RETURNED, false, false, nil, GAS_START, 0},
-	{"REVERT OK", []Instruction{{REVERT, 0}}, 20, 0, REVERTED, false, false, nil, GAS_START, 0},
-	{"PC OK", []Instruction{{PC, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 2},
-	{"STOP OK", []Instruction{{STOP, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 0},
-	{"SLOAD OK", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, false, false,
+	{"POP", []Instruction{{PUSH1, 1 << 8}, {POP, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 5},
+	{"JUMP", []Instruction{{PUSH1, 2 << 8}, {JUMP, 0}, {JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 12},
+	{"JUMPI", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 3 << 8}, {JUMPI, 0}, {JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 17},
+	{"JUMPDEST", []Instruction{{JUMPDEST, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 1},
+	{"RETURN", []Instruction{{RETURN, 0}}, 20, 0, RETURNED, false, false, nil, GAS_START, 0},
+	{"REVERT", []Instruction{{REVERT, 0}}, 20, 0, REVERTED, false, false, nil, GAS_START, 0},
+	{"PC", []Instruction{{PC, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 2},
+	{"STOP", []Instruction{{STOP, 0}}, 0, 0, STOPPED, false, false, nil, GAS_START, 0},
+	{"SLOAD", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(common.Address{0}, common.Hash{0}).Return(common.Hash{0})
 		}, GAS_START, 803},
-	{"SLOAD Berlin OK", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, true, false,
+	{"SLOAD Berlin", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(common.Address{0}, common.Hash{0}).Return(common.Hash{0})
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, common.Hash{0}).Return(true, true)
 		}, GAS_START, 103},
-	{"SLOAD Berlin no slot OK", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, true, false,
+	{"SLOAD Berlin no slot", []Instruction{{PUSH1, 0}, {SLOAD, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(common.Address{0}, common.Hash{0}).Return(common.Hash{0})
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, common.Hash{0}).Return(false, false)
 			mockStateDB.EXPECT().AddSlotToAccessList(common.Address{0}, common.Hash{0})
 		}, GAS_START, 2103},
-	{"SSTORE same value - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE same value", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 806},
-	{"SSTORE diff value, same state as db, db is 0 - OK", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, same state as db, db is 0", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_1)
 		}, GAS_START, 20006},
-	{"SSTORE diff value, same state as db, val is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, same state as db, val is 0", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 5006},
-	{"SSTORE diff value, diff state as db, db it not 0, state is 0 - OK", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, diff state as db, db it not 0, state is 0", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_2)
 			mockStateDB.EXPECT().SubRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_1)
 		}, GAS_START, 806},
-	{"SSTORE diff value, diff state as db, db it not 0, val is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, diff state as db, db it not 0, val is 0", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_2)
 			mockStateDB.EXPECT().AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 806},
-	{"SSTORE diff value, diff state as db, db same as val, db is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 1 << 8}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, diff state as db, db same as val, db is 0", []Instruction{{PUSH1, 0}, {PUSH1, 1 << 8}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_1).Return(HASH_1)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_1).Return(HASH_0)
 			mockStateDB.EXPECT().AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_1, HASH_0)
 		}, GAS_START, 806},
-	{"SSTORE diff value, diff state as db, db same as val, db is not 0 - OK", []Instruction{{PUSH1, 2 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
+	{"SSTORE diff value, diff state as db, db same as val, db is not 0", []Instruction{{PUSH1, 2 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, false, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_2)
 			mockStateDB.EXPECT().AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_2)
 		}, GAS_START, 806},
-	{"SSTORE Berlin same value - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin same value", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, false)
 			mockStateDB.EXPECT().AddSlotToAccessList(ADDRESS_0, HASH_0)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 2206},
-	{"SSTORE Berlin diff value, same state as db, db is 0 - OK", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, same state as db, db is 0", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, true)
 			mockStateDB.EXPECT().GetCommittedState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_1)
 		}, GAS_START, 20006},
-	{"SSTORE Berlin diff value, same state as db, val is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, same state as db, val is 0", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, true)
@@ -331,7 +331,7 @@ var opcodeTests = []OpcodeTest{
 			mockStateDB.EXPECT().AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 2906},
-	{"SSTORE Berlin diff value, diff state as db, db it not 0, state is 0 - OK", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, diff state as db, db it not 0, state is 0", []Instruction{{PUSH1, 1 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_0)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, true)
@@ -339,7 +339,7 @@ var opcodeTests = []OpcodeTest{
 			mockStateDB.EXPECT().SubRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_1)
 		}, GAS_START, 106},
-	{"SSTORE Berlin diff value, diff state as db, db it not 0, val is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, diff state as db, db it not 0, val is 0", []Instruction{{PUSH1, 0}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, true)
@@ -347,7 +347,7 @@ var opcodeTests = []OpcodeTest{
 			mockStateDB.EXPECT().AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_0, HASH_0)
 		}, GAS_START, 106},
-	{"SSTORE Berlin diff value, diff state as db, db same as val, db is 0 - OK", []Instruction{{PUSH1, 0}, {PUSH1, 1 << 8}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, diff state as db, db same as val, db is 0", []Instruction{{PUSH1, 0}, {PUSH1, 1 << 8}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_1).Return(HASH_1)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_1).Return(true, true)
@@ -355,7 +355,7 @@ var opcodeTests = []OpcodeTest{
 			mockStateDB.EXPECT().AddRefund(params.SstoreSetGasEIP2200 - params.WarmStorageReadCostEIP2929)
 			mockStateDB.EXPECT().SetState(ADDRESS_0, HASH_1, HASH_0)
 		}, GAS_START, 106},
-	{"SSTORE Berlin diff value, diff state as db, db same as val, db is not 0 - OK", []Instruction{{PUSH1, 2 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
+	{"SSTORE Berlin diff value, diff state as db, db same as val, db is not 0", []Instruction{{PUSH1, 2 << 8}, {PUSH1, 0}, {SSTORE, 0}}, 0, 0, STOPPED, true, false,
 		func(mockStateDB *vm.MockStateDB) {
 			mockStateDB.EXPECT().GetState(ADDRESS_0, HASH_0).Return(HASH_1)
 			mockStateDB.EXPECT().SlotInAccessList(common.Address{0}, HASH_0).Return(true, true)
@@ -379,7 +379,7 @@ func addOKOpCodes(tests []OpcodeTest) []OpcodeTest {
 		for j := 0; j < dataNum; j++ {
 			code = append(code, Instruction{DATA, 1})
 		}
-		addedTests = append(addedTests, OpcodeTest{i.String() + " execution", code, 20, 0, STOPPED, false, false, nil, GAS_START, 3})
+		addedTests = append(addedTests, OpcodeTest{i.String(), code, 20, 0, STOPPED, false, false, nil, GAS_START, 3})
 	}
 	var opCodes []OpCodeWithGas
 	opCodes = append(opCodes, getInstructionsWithGas(DUP1, SWAP16, 3)...)
@@ -404,51 +404,45 @@ func addOKOpCodes(tests []OpcodeTest) []OpcodeTest {
 	opCodes = append(opCodes, OpCodeWithGas{DUP2_LT, 6})
 	for _, opCode := range opCodes {
 		code := []Instruction{{opCode.OpCode, 0}}
-		addedTests = append(addedTests, OpcodeTest{opCode.String() + " OK execution", code, 20, 0, STOPPED, false, false, nil, GAS_START, opCode.gas})
+		addedTests = append(addedTests, OpcodeTest{opCode.String(), code, 20, 0, STOPPED, false, false, nil, GAS_START, opCode.gas})
 	}
 	return addedTests
 }
 
-func TestOK(t *testing.T) {
+func TestOKInstructionPath(t *testing.T) {
 
 	var mockCtrl *gomock.Controller
 	var mockStateDB *vm.MockStateDB
 
-	tests := addOKOpCodes(opcodeTests)
+	for _, test := range addOKOpCodes(opcodeTests) {
+		t.Run(test.name, func(t *testing.T) {
 
-	for _, test := range tests {
-		testSuccess := true
-		if test.mockCalls != nil {
-			mockCtrl = gomock.NewController(t)
-			mockStateDB = vm.NewMockStateDB(mockCtrl)
-			test.mockCalls(mockStateDB)
-		} else {
-			mockStateDB = nil
-		}
-		ctxt := getContext(test.code, make([]byte, 0), test.stackPtrPos, mockStateDB, test.gasStart, test.isBerlin, test.isLondon)
+			if test.mockCalls != nil {
+				mockCtrl = gomock.NewController(t)
+				mockStateDB = vm.NewMockStateDB(mockCtrl)
+				test.mockCalls(mockStateDB)
+			} else {
+				mockStateDB = nil
+			}
+			ctxt := getContext(test.code, make([]byte, 0), test.stackPtrPos, mockStateDB, test.gasStart, test.isBerlin, test.isLondon)
 
-		// Run testing code
-		run(&ctxt)
+			// Run testing code
+			run(&ctxt)
 
-		if test.mockCalls != nil {
-			mockCtrl.Finish()
-		}
+			if test.mockCalls != nil {
+				mockCtrl.Finish()
+			}
 
-		// Check the result.
-		if ctxt.status != test.endStatus {
-			t.Errorf("execution failed %v: status is %v, wanted %v, error %v", test.name, ctxt.status, test.endStatus, ctxt.err)
-			testSuccess = false
-		}
+			// Check the result.
+			if ctxt.status != test.endStatus {
+				t.Errorf("execution failed %v: status is %v, wanted %v, error %v", test.name, ctxt.status, test.endStatus, ctxt.err)
+			}
 
-		// Check gas consumption
-		if test.gasStart-ctxt.contract.Gas != test.gasConsumed {
-			t.Errorf("execution failed %v: gas consumption is %v, wanted %v", test.name, test.gasStart-ctxt.contract.Gas, test.gasConsumed)
-			testSuccess = false
-		}
-
-		if testSuccess {
-			t.Log("Success", test.name)
-		}
+			// Check gas consumption
+			if test.gasStart-ctxt.contract.Gas != test.gasConsumed {
+				t.Errorf("execution failed %v: gas consumption is %v, wanted %v", test.name, test.gasStart-ctxt.contract.Gas, test.gasConsumed)
+			}
+		})
 	}
 }
 
