@@ -23,6 +23,7 @@ const (
 	SUICIDED
 	INVALID_INSTRUCTION
 	OUT_OF_GAS
+	SEGMENTATION_FAULT
 	ERROR
 )
 
@@ -176,6 +177,8 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 	case OUT_OF_GAS:
 		return nil, vm.ErrOutOfGas
 	case INVALID_INSTRUCTION:
+		return nil, vm.ErrInvalidCode
+	case SEGMENTATION_FAULT:
 		return nil, vm.ErrInvalidCode
 	case ERROR:
 		if ctxt.err != nil {
@@ -676,7 +679,7 @@ func steps(c *context, one_step_only bool) {
 		case NOOP:
 			opNoop(c)
 		case DATA:
-			c.status = INVALID_INSTRUCTION
+			c.status = SEGMENTATION_FAULT
 			return
 		case INVALID:
 			opInvalid(c)
