@@ -361,7 +361,7 @@ func gasSStoreEIP2200(c *context) (uint64, error) {
 func gasSStoreEIP2929(c *context) (uint64, error) {
 
 	clearingRefund := params.SstoreClearsScheduleRefundEIP2200
-	if c.evm.ChainConfig().IsLondon(c.evm.Context.BlockNumber) {
+	if c.isLondon {
 		clearingRefund = params.SstoreClearsScheduleRefundEIP3529
 	}
 
