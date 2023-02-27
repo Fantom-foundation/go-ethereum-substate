@@ -131,34 +131,54 @@ func getStaticStackInternal(op OpCode) InstructionStack {
 		return newInstructionStack(0, 0, 0)
 	case ADD, SUB, MUL, DIV, SDIV, MOD, SMOD, EXP, SIGNEXTEND,
 		SHA3, LT, GT, SLT, SGT, EQ, AND, XOR, OR, BYTE,
-		SHL, SHR, SAR:
+		SHL, SHR, SAR,
+		SWAP1_POP, DUP2_MSTORE:
 		return newInstructionStack(2, 0, 1)
-	case ADDMOD, MULMOD:
+	case ADDMOD, MULMOD, SWAP2_SWAP1_POP_JUMP:
 		return newInstructionStack(3, 0, 1)
 	case ISZERO, NOT, BALANCE, CALLDATALOAD, EXTCODESIZE,
-		BLOCKHASH, MLOAD, SLOAD, EXTCODEHASH:
+		BLOCKHASH, MLOAD, SLOAD, EXTCODEHASH,
+		PUSH1_SHL:
 		return newInstructionStack(1, 0, 1)
 	case MSIZE, ADDRESS, ORIGIN, CALLER, CALLVALUE, CALLDATASIZE,
 		CODESIZE, GASPRICE, COINBASE, TIMESTAMP, NUMBER,
 		DIFFICULTY, GASLIMIT, PC, GAS, RETURNDATASIZE,
-		SELFBALANCE, CHAINID, BASEFEE:
+		SELFBALANCE, CHAINID, BASEFEE,
+		PUSH1_PUSH1_PUSH1_SHL_SUB:
 		return newInstructionStack(0, 1, 1)
-	case POP, JUMP, SELFDESTRUCT:
+	case POP, JUMP, SELFDESTRUCT,
+		SWAP2_POP, PUSH1_ADD, PUSH2_JUMPI,
+		ISZERO_PUSH2_JUMPI:
 		return newInstructionStack(1, 0, 0)
-	case MSTORE, MSTORE8, SSTORE, JUMPI, RETURN, REVERT:
+	case MSTORE, MSTORE8, SSTORE, JUMPI, RETURN, REVERT,
+		POP_POP, POP_JUMP:
 		return newInstructionStack(2, 0, 0)
 	case CALLDATACOPY, CODECOPY, RETURNDATACOPY:
 		return newInstructionStack(3, 0, 0)
 	case EXTCODECOPY:
 		return newInstructionStack(4, 0, 0)
 	case CREATE:
-		return newInstructionStack(3, 1, 1)
+		return newInstructionStack(3, 0, 1)
 	case CREATE2:
-		return newInstructionStack(4, 1, 1)
+		return newInstructionStack(4, 0, 1)
 	case CALL, CALLCODE:
-		return newInstructionStack(7, 1, 1)
+		return newInstructionStack(7, 0, 1)
 	case STATICCALL, DELEGATECALL:
-		return newInstructionStack(6, 1, 1)
+		return newInstructionStack(6, 0, 1)
+	case PUSH1_DUP1, PUSH1_PUSH1:
+		return newInstructionStack(0, 2, 2)
+	case SWAP2_SWAP1:
+		return newInstructionStack(3, 0, 3)
+	case DUP2_LT:
+		return newInstructionStack(2, 0, 2)
+	case SWAP1_POP_SWAP2_SWAP1:
+		return newInstructionStack(4, 0, 3)
+	case POP_SWAP2_SWAP1_POP:
+		return newInstructionStack(4, 0, 2)
+	case PUSH1_PUSH4_DUP3:
+		return newInstructionStack(0, 3, 3)
+	case AND_SWAP1_POP_SWAP2_SWAP1:
+		return newInstructionStack(5, 0, 3)
 	}
 	return newInstructionStack(0, 0, 0)
 }

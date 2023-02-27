@@ -19,6 +19,7 @@ package state
 import (
 	"bytes"
 	"fmt"
+	substate "github.com/Fantom-foundation/Substate"
 	"io"
 	"math/big"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/substate"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -92,7 +92,7 @@ type stateObject struct {
 	suicided  bool
 	deleted   bool
 
-	// Accessed storage addresses 
+	// Accessed storage addresses
 	AccessedStorage map[common.Hash]struct{}
 }
 
@@ -122,13 +122,13 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 		data.Root = emptyRoot
 	}
 	return &stateObject{
-		db:             db,
-		address:        address,
-		addrHash:       crypto.Keccak256Hash(address[:]),
-		data:           data,
-		originStorage:  make(Storage),
-		pendingStorage: make(Storage),
-		dirtyStorage:   make(Storage),
+		db:              db,
+		address:         address,
+		addrHash:        crypto.Keccak256Hash(address[:]),
+		data:            data,
+		originStorage:   make(Storage),
+		pendingStorage:  make(Storage),
+		dirtyStorage:    make(Storage),
 		AccessedStorage: make(map[common.Hash]struct{}),
 	}
 }

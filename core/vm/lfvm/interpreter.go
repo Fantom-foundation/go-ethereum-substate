@@ -23,6 +23,7 @@ const (
 	SUICIDED
 	INVALID_INSTRUCTION
 	OUT_OF_GAS
+	SEGMENTATION_FAULT
 	ERROR
 )
 
@@ -177,6 +178,8 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		return nil, vm.ErrOutOfGas
 	case INVALID_INSTRUCTION:
 		return nil, vm.ErrInvalidCode
+	case SEGMENTATION_FAULT:
+		return nil, vm.ErrInvalidCode
 	case ERROR:
 		if ctxt.err != nil {
 			return nil, ctxt.err
@@ -184,7 +187,12 @@ func Run(evm *vm.EVM, cfg vm.Config, contract *vm.Contract, code Code, data []by
 		return nil, fmt.Errorf("unspecified error in interpreter")
 	}
 
-	panic(fmt.Sprintf("unknown interpreter status: %d", ctxt.status))
+	if ctxt.err != nil {
+		ctxt.status = ERROR
+		return nil, fmt.Errorf("unknown interpreter status %d with error %v", ctxt.status, ctxt.err)
+	} else {
+		return nil, fmt.Errorf("unknown interpreter status %d", ctxt.status)
+	}
 }
 
 func run(c *context) {
@@ -387,6 +395,22 @@ func step(c *context) {
 func stepToEnd(c *context) {
 	steps(c, false)
 }
+
+func checkStackBoundry(c *context, op OpCode) error {
+	stackLen := c.stack.len()
+	if stackLen < staticStackBoundry[op].stackMin {
+		c.err = &vm.ErrStackUnderflow{}
+		c.status = ERROR
+		return c.err
+	}
+	if stackLen > int(params.StackLimit)-1 && stackLen > staticStackBoundry[op].stackMax {
+		c.err = &vm.ErrStackOverflow{}
+		c.status = ERROR
+		return c.err
+	}
+	return nil
+}
+
 func steps(c *context, one_step_only bool) {
 	// Idea: handle static gas price in static dispatch below (saves an array lookup)
 	static_gas_prices := getStaticGasPrices(c.isBerlin)
@@ -410,6 +434,11 @@ func steps(c *context, one_step_only bool) {
 			return
 		}
 
+		// Need to check Call stack boundry before using static gas
+		if op == CALL && checkStackBoundry(c, op) != nil {
+			return
+		}
+
 		// If the interpreter is operating in readonly mode, make sure no
 		// state-modifying operation is performed. The 3rd stack item
 		// for a call operation is the value. Transferring value from one
@@ -426,15 +455,8 @@ func steps(c *context, one_step_only bool) {
 			return
 		}
 
-		stackLen := c.stack.len()
-		if stackLen < staticStackBoundry[op].stackMin {
-			c.err = &vm.ErrStackUnderflow{}
-			c.status = ERROR
-			return
-		}
-		if stackLen > int(params.StackLimit)-1 && stackLen > staticStackBoundry[op].stackMax {
-			c.err = &vm.ErrStackOverflow{}
-			c.status = ERROR
+		// Check stack boundry for every instruction
+		if checkStackBoundry(c, op) != nil {
 			return
 		}
 
@@ -657,7 +679,8 @@ func steps(c *context, one_step_only bool) {
 		case NOOP:
 			opNoop(c)
 		case DATA:
-			panic("can not interpret data as instruction")
+			c.status = SEGMENTATION_FAULT
+			return
 		case INVALID:
 			opInvalid(c)
 		case SLOAD:
@@ -774,7 +797,8 @@ func steps(c *context, one_step_only bool) {
 		case PUSH1_PUSH1_PUSH1_SHL_SUB:
 			opPush1_Push1_Push1_Shl_Sub(c)
 		default:
-			panic(fmt.Sprintf("Unsupported operation: %v", op))
+			c.status = INVALID_INSTRUCTION
+			return
 		}
 		c.pc++
 

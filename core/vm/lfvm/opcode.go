@@ -323,6 +323,7 @@ var op_to_string = map[OpCode]string{
 	MSTORE:  "MSTORE",
 	MSTORE8: "MSTORE8",
 	MLOAD:   "MLOAD",
+	MSIZE:   "MSIZE",
 
 	SLOAD:  "SLOAD",
 	SSTORE: "SSTORE",

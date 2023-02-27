@@ -24,6 +24,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+//go:generate mockgen -source interface.go -destination mock_state.go -package vm StateDB
+
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	CreateAccount(common.Address)
