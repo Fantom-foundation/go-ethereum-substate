@@ -18,7 +18,7 @@ func UdpPortListeners(port int) (processes map[int]string, err error) {
 			return int(se.LocalAddr.Port) == port
 		})
 		if err != nil {
-			return
+			continue
 		}
 
 		for _, listener := range binds {

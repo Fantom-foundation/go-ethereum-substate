@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -40,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/msgrate"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -2222,7 +2223,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	req, ok := s.accountReqs[id]
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
-		logger.Warn("Unexpected account range packet")
+		logger.Debug("Unexpected account range packet")
 		s.lock.Unlock()
 		return nil
 	}
@@ -2334,7 +2335,7 @@ func (s *Syncer) onByteCodes(peer SyncPeer, id uint64, bytecodes [][]byte) error
 	req, ok := s.bytecodeReqs[id]
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
-		logger.Warn("Unexpected bytecode packet")
+		logger.Debug("Unexpected bytecode packet")
 		s.lock.Unlock()
 		return nil
 	}
@@ -2443,7 +2444,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 	req, ok := s.storageReqs[id]
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
-		logger.Warn("Unexpected storage ranges packet")
+		logger.Debug("Unexpected storage ranges packet")
 		s.lock.Unlock()
 		return nil
 	}
@@ -2570,7 +2571,7 @@ func (s *Syncer) OnTrieNodes(peer SyncPeer, id uint64, trienodes [][]byte) error
 	req, ok := s.trienodeHealReqs[id]
 	if !ok {
 		// Request stale, perhaps the peer timed out but came through in the end
-		logger.Warn("Unexpected trienode heal packet")
+		logger.Debug("Unexpected trienode heal packet")
 		s.lock.Unlock()
 		return nil
 	}
@@ -2797,6 +2798,11 @@ func (s *Syncer) reportSyncProgress(force bool) {
 		new(big.Int).Mul(new(big.Int).SetUint64(uint64(synced)), hashSpace),
 		accountFills,
 	).Uint64())
+
+	// Don't report anything until we have a meaningful progress
+	if estBytes < 1.0 {
+		return
+	}
 
 	elapsed := time.Since(s.startTime)
 	estTime := elapsed / time.Duration(synced) * time.Duration(estBytes)

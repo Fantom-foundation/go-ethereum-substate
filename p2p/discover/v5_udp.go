@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover/discfilter"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -65,6 +66,8 @@ type UDPv5 struct {
 	conn         UDPConn
 	tab          *Table
 	netrestrict  *netutil.Netlist
+	iprestrict   []string
+	privateNodes []*enode.Node
 	priv         *ecdsa.PrivateKey
 	localNode    *enode.LocalNode
 	db           *enode.DB
@@ -144,6 +147,8 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		localNode:    ln,
 		db:           ln.Database(),
 		netrestrict:  cfg.NetRestrict,
+		iprestrict:   cfg.IPRestrict,
+		privateNodes: cfg.PrivateNodes,
 		priv:         cfg.PrivateKey,
 		log:          cfg.Log,
 		validSchemes: cfg.ValidSchemes,
@@ -406,6 +411,12 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	if err := netutil.CheckRelayIP(c.node.IP(), node.IP()); err != nil {
 		return nil, err
+	}
+	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+		return nil, errors.New("not contained in netrestrict list")
+	}
+	if len(t.iprestrict) > 0 && !has(t.iprestrict, node.IP().String()) {
+		return nil, errors.New("not contained in iprestrict list")
 	}
 	if c.node.UDP() <= 1024 {
 		return nil, errLowPort
@@ -810,6 +821,14 @@ func (t *UDPv5) collectTableNodes(rip net.IP, distances []uint, limit int) []*en
 
 		// Apply some pre-checks to avoid sending invalid nodes.
 		for _, n := range bn {
+			// Don't advertise the private nodes
+			if len(t.privateNodes) > 0 && containsEnode(t.privateNodes, n) {
+				continue
+			}
+			// Don't advertise the bots
+			if discfilter.Banned(n.ID(), n.Record()) {
+				continue
+			}
 			// TODO livenessChecks > 1
 			if netutil.CheckRelayIP(rip, n.IP()) != nil {
 				continue

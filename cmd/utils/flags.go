@@ -33,6 +33,10 @@ import (
 	"text/template"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
+	gopsutil "github.com/shirou/gopsutil/mem"
+	"gopkg.in/urfave/cli.v1"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -66,9 +70,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	pcsclite "github.com/gballet/go-libpcsclite"
-	gopsutil "github.com/shirou/gopsutil/mem"
-	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
@@ -656,6 +657,14 @@ var (
 		Name:  "netrestrict",
 		Usage: "Restricts network communication to the given IP networks (CIDR masks)",
 	}
+	IPrestrictFlag = cli.StringFlag{
+		Name:  "iprestrict",
+		Usage: "Restricts network communication to the given IP addresses",
+	}
+	PrivateNodeFlag = cli.StringFlag{
+		Name:  "privatenodes",
+		Usage: "Comma separated enode URLs which must not be advertised as peers to public network",
+	}
 	DNSDiscoveryFlag = cli.StringFlag{
 		Name:  "discovery.dns",
 		Usage: "Sets DNS discovery entry points (use \"\" to disable DNS)",
@@ -1195,6 +1204,21 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
 		cfg.NetRestrict = list
+	}
+
+	var err error
+	if iprestrict := ctx.GlobalString(IPrestrictFlag.Name); iprestrict != "" {
+		cfg.IPRestrict, err = netutil.ParseIPs(iprestrict)
+		if err != nil {
+			Fatalf("Option %q: %v", IPrestrictFlag.Name, err)
+		}
+	}
+
+	if privatenodes := ctx.GlobalString(PrivateNodeFlag.Name); privatenodes != "" {
+		cfg.PrivateNodes, err = enode.ParseNodes(privatenodes)
+		if err != nil {
+			Fatalf("Option %q: %v", PrivateNodeFlag.Name, err)
+		}
 	}
 
 	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {

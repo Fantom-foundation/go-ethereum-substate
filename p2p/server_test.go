@@ -237,7 +237,9 @@ func TestServerRemovePeerDisconnect(t *testing.T) {
 // when the server is at capacity. Trusted connections should still be accepted.
 func TestServerAtCap(t *testing.T) {
 	trustedNode := newkey()
+	privateNode := newkey()
 	trustedID := enode.PubkeyToIDV4(&trustedNode.PublicKey)
+	privateID := enode.PubkeyToIDV4(&privateNode.PublicKey)
 	srv := &Server{
 		Config: Config{
 			PrivateKey:   newkey(),
@@ -245,6 +247,7 @@ func TestServerAtCap(t *testing.T) {
 			NoDial:       true,
 			NoDiscovery:  true,
 			TrustedNodes: []*enode.Node{newNode(trustedID, "")},
+			PrivateNodes: []*enode.Node{newNode(privateID, "")},
 			Logger:       testlog.Logger(t, log.LvlTrace),
 		},
 	}
@@ -259,6 +262,9 @@ func TestServerAtCap(t *testing.T) {
 		node := enode.SignNull(new(enr.Record), id)
 		return &conn{fd: fd, transport: tx, flags: inboundConn, node: node, cont: make(chan error)}
 	}
+
+	// remove private node (it was added a static node at the beginning)
+	srv.RemovePeer(newNode(privateID, ""))
 
 	// Inject a few connections to fill up the peer set.
 	for i := 0; i < 10; i++ {
@@ -275,6 +281,21 @@ func TestServerAtCap(t *testing.T) {
 	}
 	// Try inserting a trusted connection.
 	c = newconn(trustedID)
+	if err := srv.checkpoint(c, srv.checkpointPostHandshake); err != nil {
+		t.Error("unexpected error for trusted conn @posthandshake:", err)
+	}
+	if !c.is(trustedConn) {
+		t.Error("Server did not set trusted flag")
+	}
+
+	// Try inserting a non-trusted connection.
+	anotherID = randomID()
+	c = newconn(anotherID)
+	if err := srv.checkpoint(c, srv.checkpointPostHandshake); err != DiscTooManyPeers {
+		t.Error("wrong error for insert:", err)
+	}
+	// Try inserting the private node as trusted connection as well
+	c = newconn(privateID)
 	if err := srv.checkpoint(c, srv.checkpointPostHandshake); err != nil {
 		t.Error("unexpected error for trusted conn @posthandshake:", err)
 	}
@@ -304,6 +325,8 @@ func TestServerPeerLimits(t *testing.T) {
 	srvkey := newkey()
 	clientkey := newkey()
 	clientnode := enode.NewV4(&clientkey.PublicKey, nil, 0, 0)
+	privatekey := newkey()
+	privatenode := enode.NewV4(&privatekey.PublicKey, nil, 0, 0)
 
 	var tp = &setupTransport{
 		pubkey: &clientkey.PublicKey,
@@ -316,12 +339,13 @@ func TestServerPeerLimits(t *testing.T) {
 
 	srv := &Server{
 		Config: Config{
-			PrivateKey:  srvkey,
-			MaxPeers:    0,
-			NoDial:      true,
-			NoDiscovery: true,
-			Protocols:   []Protocol{discard},
-			Logger:      testlog.Logger(t, log.LvlTrace),
+			PrivateKey:   srvkey,
+			MaxPeers:     0,
+			NoDial:       true,
+			NoDiscovery:  true,
+			Protocols:    []Protocol{discard},
+			PrivateNodes: []*enode.Node{privatenode},
+			Logger:       testlog.Logger(t, log.LvlTrace),
 		},
 		newTransport: func(fd net.Conn, dialDest *ecdsa.PublicKey) transport { return tp },
 	}
@@ -361,6 +385,25 @@ func TestServerPeerLimits(t *testing.T) {
 	srv.SetupConn(conn, flags, dialDest)
 	if tp.closeErr != DiscTooManyPeers {
 		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	srv.RemovePeer(privatenode)
+
+	// Check that server is full again.
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr != DiscTooManyPeers {
+		t.Errorf("unexpected close error: %q", tp.closeErr)
+	}
+	conn.Close()
+
+	// Check that server allows a private peer despite being full.
+	dialDest = privatenode
+	conn, _ = net.Pipe()
+	srv.SetupConn(conn, flags, dialDest)
+	if tp.closeErr == DiscTooManyPeers {
+		t.Errorf("failed to bypass MaxPeers with private node: %q", tp.closeErr)
 	}
 	conn.Close()
 }
