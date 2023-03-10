@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
-// +build !gofuzz
-// +build cgo
+//go:build !gofuzz && cgo
+// +build !gofuzz,cgo
 
 package secp256k1
 
@@ -16,7 +16,7 @@ import (
 
 #include "libsecp256k1/include/secp256k1.h"
 
-extern int secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
+extern int myprefix_secp256k1_ext_scalar_mul(const secp256k1_context* ctx, const unsigned char *point, const unsigned char *scalar);
 
 */
 import "C"
@@ -39,7 +39,7 @@ func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 
 	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
 	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
-	res := C.secp256k1_ext_scalar_mul(context, pointPtr, scalarPtr)
+	res := C.myprefix_secp256k1_ext_scalar_mul(context, pointPtr, scalarPtr)
 
 	// Unpack the result and clear temporaries.
 	x := new(big.Int).SetBytes(point[:32])

@@ -296,7 +296,7 @@ void bench_context_verify(void* arg) {
     int i;
     (void)arg;
     for (i = 0; i < 20; i++) {
-        secp256k1_context_destroy(secp256k1_context_create(SECP256K1_CONTEXT_VERIFY));
+        myprefix_secp256k1_context_destroy(myprefix_secp256k1_context_create(SECP256K1_CONTEXT_VERIFY));
     }
 }
 
@@ -304,7 +304,7 @@ void bench_context_sign(void* arg) {
     int i;
     (void)arg;
     for (i = 0; i < 200; i++) {
-        secp256k1_context_destroy(secp256k1_context_create(SECP256K1_CONTEXT_SIGN));
+        myprefix_secp256k1_context_destroy(myprefix_secp256k1_context_create(SECP256K1_CONTEXT_SIGN));
     }
 }
 
