@@ -157,7 +157,9 @@ func (ch resetObjectChange) revert(s *StateDB) {
 }
 
 func (ch resetObjectChange) dirtied() *common.Address {
-	return nil
+	// Note: this is a Fantom custom change for -- what we think -- is a bug in Geth.
+	//return nil
+	return &ch.prev.address
 }
 
 func (ch suicideChange) revert(s *StateDB) {
