@@ -67,7 +67,7 @@ type stateObject struct {
 	address  common.Address
 	addrHash common.Hash // hash of ethereum address of the account
 	data     Account
-	db       *StateDB
+	db       *LegacyStateDB
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -111,7 +111,7 @@ type Account struct {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, data Account) *stateObject {
+func newObject(db *LegacyStateDB, address common.Address, data Account) *stateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -466,7 +466,7 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
-func (s *stateObject) deepCopy(db *StateDB) *stateObject {
+func (s *stateObject) deepCopy(db *LegacyStateDB) *stateObject {
 	stateObject := newObject(db, s.address, s.data)
 	if s.trie != nil {
 		stateObject.trie = db.db.CopyTrie(s.trie)

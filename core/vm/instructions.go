@@ -448,9 +448,10 @@ func opBlockhash(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContex
 	if substate.RecordReplay {
 		// convert vm.StateDB to state.StateDB and save block hash
 		defer func() {
-			statedb, ok := interpreter.evm.StateDB.(*state.StateDB)
-			if ok {
-				statedb.SubstateBlockHashes[num64] = common.BytesToHash(num.Bytes())
+			if statedb, ok := interpreter.evm.StateDB.(*state.StateDB); ok {
+				if legacy, ok := statedb.StateDbInterface.(*state.LegacyStateDB); ok {
+					legacy.SubstateBlockHashes[num64] = common.BytesToHash(num.Bytes())
+				}
 			}
 		}()
 	}

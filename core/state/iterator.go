@@ -28,7 +28,7 @@ import (
 // NodeIterator is an iterator to traverse the entire state trie post-order,
 // including all of the contract code and contract state tries.
 type NodeIterator struct {
-	state *StateDB // State being iterated
+	state *LegacyStateDB // State being iterated
 
 	stateIt trie.NodeIterator // Primary iterator for the global state trie
 	dataIt  trie.NodeIterator // Secondary iterator for the data trie of a contract
@@ -44,7 +44,7 @@ type NodeIterator struct {
 }
 
 // NewNodeIterator creates an post-order state node iterator.
-func NewNodeIterator(state *StateDB) *NodeIterator {
+func NewNodeIterator(state *LegacyStateDB) *NodeIterator {
 	return &NodeIterator{
 		state: state,
 	}
