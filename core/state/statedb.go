@@ -1129,6 +1129,10 @@ func (s *LegacyStateDB) GetSubstatePostAlloc() substate.SubstateAlloc {
 	return s.SubstatePostAlloc
 }
 
+func (s *LegacyStateDB) EndBlock(number uint64) {
+	// not used by LegacyStateDB
+}
+
 func (s *LegacyStateDB) GetAccountReads() time.Duration {
 	return s.AccountReads
 }

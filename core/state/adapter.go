@@ -81,6 +81,7 @@ type StateDbInterface interface {
 
 	SetPrehashedCode(addr common.Address, hash common.Hash, code []byte)
 	GetSubstatePostAlloc() substate.SubstateAlloc
+	EndBlock(number uint64)
 }
 
 type StateDB struct {
@@ -101,7 +102,7 @@ type StateDB struct {
 }
 
 func (s *StateDB) Copy() *StateDB {
-	return &StateDB{ s.StateDbInterface.Copy(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+	return &StateDB{s.StateDbInterface.Copy(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 }
 
 func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
@@ -134,5 +135,5 @@ func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, laye
 }
 
 func NewWrapper(inner StateDbInterface) *StateDB {
-	return &StateDB{ inner, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+	return &StateDB{inner, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 }
