@@ -81,6 +81,7 @@ type StateDbInterface interface {
 
 	SetPrehashedCode(addr common.Address, hash common.Hash, code []byte)
 	GetSubstatePostAlloc() substate.SubstateAlloc
+	BeginBlock(number uint64)
 	EndBlock(number uint64)
 }
 
