@@ -91,6 +91,29 @@ func (x SubstateAlloc) Merge(y SubstateAlloc) {
 	}
 }
 
+// Diff computes the difference set between two substate alloc (z = x\y)
+func (x SubstateAlloc) Diff(y SubstateAlloc) SubstateAlloc {
+	z := make(SubstateAlloc)
+	for addr, account := range x {
+		if yaccount, found := y[addr]; !found {
+			z[addr] = account.Copy()
+		} else {
+			if yaccount.Equal(account) {
+				continue
+			} else {
+				z[addr] = NewSubstateAccount(account.Nonce, account.Balance, account.Code)
+
+				for key, value := range account.Storage {
+					if yvalue, found := y[addr].Storage[key]; !found || yvalue != value {
+						z[addr].Storage[key] = value
+					}
+				}
+			}
+		}
+	}
+	return z
+}
+
 func (x SubstateAlloc) Equal(y SubstateAlloc) bool {
 	if len(x) != len(y) {
 		return false
