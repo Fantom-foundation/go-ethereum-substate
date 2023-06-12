@@ -19,7 +19,6 @@ package state
 import (
 	"bytes"
 	"fmt"
-	substate "github.com/Fantom-foundation/Substate"
 	"io"
 	"math/big"
 	"time"
@@ -28,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/substate"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
