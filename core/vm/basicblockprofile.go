@@ -19,65 +19,74 @@ package vm
 import (
 	"context"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
 	"log"
-	"encoding/hex"
+	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-// Basic-block profiling flag controlled by cli
+// BasicBlockProfiling flag controlled by cli.
 var BasicBlockProfiling bool
 
-// Maximal number of records per SQLITE3 transaction for writing
-const BasicBlockMaxNumRecords = 1000
-
-// Buffer size for micro-profiling channel
-var BasicBlockProfilingBufferSize int
-
-// Name of SQLITE3 database
+// BasicBlockProfilingDB is the filename of the basic-block profiling db.
 var BasicBlockProfilingDB string
 
-// Basic-block data record for a single smart contract invocation
+// numRecords is the maximal number of records per SQLITE3 transaction for writing.
+const numRecords = 1000
+
+// channelSize sets the buffer size for basic-block profiling.
+const channelSize = 10000
+
+// BasicBlockInfo contains runtime information of a basic block.
+type BasicBlockInfo struct {
+	Frequency uint64        // dynamic execution frequency of basic block
+	Duration  time.Duration // accumulated runtime of basic block
+}
+
+// ContractInvocation contains basic-block infos for one invocation.
+type ContractInvocation map[uint32]BasicBlockInfo
+
+// BasiBlockProfileData record for a single smart contract invocation.
 type BasicBlockProfileData struct {
-	Contract            common.Address      // contract in hex format
-	BasicBlockFrequency map[uint]BasicBlock // basic block frequency
+	ContractHash string             // contract hash of smart contract
+	ProfileInfo  ContractInvocation // profiling information of an invocation
 }
 
-// Basic-block data record for a single smart contract invocation
+// BasicBlockKey uses contract hash and code address of basic block as a key.
 type BasicBlockKey struct {
-	Contract     string // contract in hex format
-	Instructions string // instructions in hex format
-	Address      uint   // basic-block start address
+	ContractHash string // contract in hex format
+	Address      uint32 // basic-block code address
 }
 
-// Basic-block statistic
-type BasicBlockProfileStatistic struct {
-	basicBlockFrequency map[BasicBlockKey]uint64 // basic block statistics
+// BasicBlockProfileStatistics for contracts/invocations.
+type BasicBlockProfileStatistic map[BasicBlockKey]BasicBlockInfo
+
+// bbpChannel is the basic-block profiling channel.
+var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, channelSize)
+
+// NewBasicBlockProfileStatistics creates a new basic-block statistic
+func NewBasicBlockProfileStatistic() BasicBlockProfileStatistic {
+	return make(map[BasicBlockKey]BasicBlockInfo)
 }
 
-// Basic-Block Profiling channel
-var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, BasicBlockProfilingBufferSize)
-
-// Create new micro-profiling statistic
-func NewBasicBlockProfileStatistic() *BasicBlockProfileStatistic {
-	p := new(BasicBlockProfileStatistic)
-	p.basicBlockFrequency = make(map[BasicBlockKey]uint64)
-	return p
-}
-
-// The data collector checks for a stopping signal and processes
-// the workers' records via a channel. A data collector is a background task.
-func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps *BasicBlockProfileStatistic) {
+// BasicBlockProfilingCollector is the data collector that collects basic-block profiling
+// data from evm invocations and updates the statistics.
+func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps BasicBlockProfileStatistic) {
 	defer close(done)
 	for {
 		select {
 
-		// receive a new data record from a worker?
+		// receive a new data record from an evm instance
 		case bbpd := <-bbpChannel:
-			for addr, bb := range bbpd.BasicBlockFrequency {
-				bkey := BasicBlockKey{Contract: bbpd.Contract.String(), Address: addr, Instructions: hex.EncodeToString(bb.Instructions)}
-				bbps.basicBlockFrequency[bkey] += bb.Frequency
+			for addr, info := range bbpd.ProfileInfo {
+				// construct new key for stats
+				key := BasicBlockKey{ContractHash: bbpd.ContractHash, Address: addr}
+
+				// update stats
+				sinfo := bbps[key]
+				sinfo.Frequency += info.Frequency
+				sinfo.Duration += info.Duration
+				bbps[key] = sinfo
 			}
 
 		// receive stop signal?
@@ -89,23 +98,23 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 	}
 }
 
-// put micro profiling data into the processing queue
+// ProcessBasicBlockProfileData puts a new record into profiling channel.
 func ProcessBasicBlockProfileData(bbpd *BasicBlockProfileData) {
 	bbpChannel <- bbpd
 }
 
-// Merge two basic-block profiling statistics
-func (bbps *BasicBlockProfileStatistic) Merge(src *BasicBlockProfileStatistic) {
-	// update opcode frequency
-	for bb, freq := range src.basicBlockFrequency {
-		bbps.basicBlockFrequency[bb] += freq
+// Merge two basic-block profiling statistics.
+func (bbps BasicBlockProfileStatistic) Merge(src BasicBlockProfileStatistic) {
+	for key, info := range src {
+		sinfo := bbps[key]
+		sinfo.Frequency += info.Frequency
+		sinfo.Duration += info.Duration
+		bbps[key] = sinfo
 	}
 }
 
-// dump basic block frequency stats into a SQLITE3 database
-func (bbps *BasicBlockProfileStatistic) Dump() {
-	// Dump basic-block frequency statistics into a SQLITE3 database
-
+// Dump basic block frequency stats into a SQLITE3 database
+func (bbps BasicBlockProfileStatistic) Dump() {
 	// open sqlite3 database
 	db, err := sql.Open("sqlite3", BasicBlockProfilingDB) // Open the created SQLite File
 	if err != nil {
@@ -114,7 +123,7 @@ func (bbps *BasicBlockProfileStatistic) Dump() {
 	defer db.Close()
 
 	// drop basic-block frequency table
-	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockFrequency;`
+	const dropBasicBlockFrequency string = `DROP TABLE IF EXISTS BasicBlockProfile;`
 	_, err = db.Exec(dropBasicBlockFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -122,11 +131,11 @@ func (bbps *BasicBlockProfileStatistic) Dump() {
 
 	// create new table
 	const createBasicBlockFrequency string = `
-	CREATE TABLE BasicBlockFrequency (
+	CREATE TABLE BasicBlockProfile (
 	 contract TEXT,
 	 address NUMERIC,
-	 instructions TEXT,
-	 frequency NUMERIC
+	 frequency NUMERIC,
+	 duration NUMERIC
 	);`
 	_, err = db.Exec(createBasicBlockFrequency)
 	if err != nil {
@@ -141,17 +150,17 @@ func (bbps *BasicBlockProfileStatistic) Dump() {
 	}
 
 	// prepare the insert statement for faster inserts
-	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, instructions, frequency) VALUES (?, ?, ?, ?)`
+	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, frequency, duration) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
 
-	// populate all values into the DB
+	// insert profile stats into the DB
 	ctr := 1
-	for bkey, freq := range bbps.basicBlockFrequency {
+	for key, info := range bbps {
 		// commit dataset when record threshold is reached
-		if ctr >= BasicBlockMaxNumRecords {
+		if ctr >= numRecords {
 			ctr = 1
 			_, err = db.Exec("END TRANSACTION; BEGIN TRANSACTION;")
 			if err != nil {
@@ -160,7 +169,7 @@ func (bbps *BasicBlockProfileStatistic) Dump() {
 		} else {
 			ctr++
 		}
-		_, err = statement.Exec(bkey.Contract, bkey.Address, bkey.Instructions, freq)
+		_, err = statement.Exec(key.ContractHash, key.Address, info.Frequency, info.Duration)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
