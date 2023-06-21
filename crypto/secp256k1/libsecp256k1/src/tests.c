@@ -3518,32 +3518,32 @@ void test_ecdsa_end_to_end(void) {
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[2], message, &pubkey) == 1);
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[3], message, &pubkey) == 1);
     /* Test lower-S form, malleate, verify and fail, test again, malleate again */
-    CHECK(!geth_geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[0]));
+    CHECK(!geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[0]));
     geth_secp256k1_ecdsa_signature_load(ctx, &r, &s, &signature[0]);
     secp256k1_scalar_negate(&s, &s);
     geth_secp256k1_ecdsa_signature_save(&signature[5], &r, &s);
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[5], message, &pubkey) == 0);
-    CHECK(geth_geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
-    CHECK(geth_geth_secp256k1_ecdsa_signature_normalize(ctx, &signature[5], &signature[5]));
-    CHECK(!geth_geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
-    CHECK(!geth_geth_secp256k1_ecdsa_signature_normalize(ctx, &signature[5], &signature[5]));
+    CHECK(geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
+    CHECK(geth_secp256k1_ecdsa_signature_normalize(ctx, &signature[5], &signature[5]));
+    CHECK(!geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
+    CHECK(!geth_secp256k1_ecdsa_signature_normalize(ctx, &signature[5], &signature[5]));
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[5], message, &pubkey) == 1);
     secp256k1_scalar_negate(&s, &s);
     geth_secp256k1_ecdsa_signature_save(&signature[5], &r, &s);
-    CHECK(!geth_geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
+    CHECK(!geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, &signature[5]));
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[5], message, &pubkey) == 1);
     CHECK(memcmp(&signature[5], &signature[0], 64) == 0);
 
     /* Serialize/parse DER and verify again */
-    CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, sig, &siglen, &signature[0]) == 1);
+    CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, sig, &siglen, &signature[0]) == 1);
     memset(&signature[0], 0, sizeof(signature[0]));
-    CHECK(geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &signature[0], sig, siglen) == 1);
+    CHECK(geth_secp256k1_ecdsa_signature_parse_der(ctx, &signature[0], sig, siglen) == 1);
     CHECK(geth_secp256k1_ecdsa_verify(ctx, &signature[0], message, &pubkey) == 1);
     /* Serialize/destroy/parse DER and verify again. */
     siglen = 74;
-    CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, sig, &siglen, &signature[0]) == 1);
+    CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, sig, &siglen, &signature[0]) == 1);
     sig[secp256k1_rand_int(siglen)] += 1 + secp256k1_rand_int(255);
-    CHECK(geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &signature[0], sig, siglen) == 0 ||
+    CHECK(geth_secp256k1_ecdsa_signature_parse_der(ctx, &signature[0], sig, siglen) == 0 ||
           geth_secp256k1_ecdsa_verify(ctx, &signature[0], message, &pubkey) == 0);
 }
 
@@ -3654,23 +3654,23 @@ int test_ecdsa_der_parse(const unsigned char *sig, size_t siglen, int certainly_
     int parsed_openssl, valid_openssl = 0, roundtrips_openssl = 0;
 #endif
 
-    parsed_der = geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig_der, sig, siglen);
+    parsed_der = geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig_der, sig, siglen);
     if (parsed_der) {
-        ret |= (!geth_geth_secp256k1_ecdsa_signature_serialize_compact(ctx, compact_der, &sig_der)) << 0;
+        ret |= (!geth_secp256k1_ecdsa_signature_serialize_compact(ctx, compact_der, &sig_der)) << 0;
         valid_der = (memcmp(compact_der, zeroes, 32) != 0) && (memcmp(compact_der + 32, zeroes, 32) != 0);
     }
     if (valid_der) {
-        ret |= (!geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, roundtrip_der, &len_der, &sig_der)) << 1;
+        ret |= (!geth_secp256k1_ecdsa_signature_serialize_der(ctx, roundtrip_der, &len_der, &sig_der)) << 1;
         roundtrips_der = (len_der == siglen) && memcmp(roundtrip_der, sig, siglen) == 0;
     }
 
     parsed_der_lax = ecdsa_signature_parse_der_lax(ctx, &sig_der_lax, sig, siglen);
     if (parsed_der_lax) {
-        ret |= (!geth_geth_secp256k1_ecdsa_signature_serialize_compact(ctx, compact_der_lax, &sig_der_lax)) << 10;
+        ret |= (!geth_secp256k1_ecdsa_signature_serialize_compact(ctx, compact_der_lax, &sig_der_lax)) << 10;
         valid_der_lax = (memcmp(compact_der_lax, zeroes, 32) != 0) && (memcmp(compact_der_lax + 32, zeroes, 32) != 0);
     }
     if (valid_der_lax) {
-        ret |= (!geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, roundtrip_der_lax, &len_der_lax, &sig_der_lax)) << 11;
+        ret |= (!geth_secp256k1_ecdsa_signature_serialize_der(ctx, roundtrip_der_lax, &len_der_lax, &sig_der_lax)) << 11;
         roundtrips_der_lax = (len_der_lax == siglen) && memcmp(roundtrip_der_lax, sig, siglen) == 0;
     }
 
@@ -4175,41 +4175,41 @@ void test_ecdsa_edge_cases(void) {
         CHECK(geth_secp256k1_ecdsa_verify(ctx, &sig, msg, &pubkey) == 0);
         CHECK(ecount == 8);
         siglen = 72;
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, NULL, &siglen, &sig) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, NULL, &siglen, &sig) == 0);
         CHECK(ecount == 9);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, NULL, &sig) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, NULL, &sig) == 0);
         CHECK(ecount == 10);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, NULL) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, NULL) == 0);
         CHECK(ecount == 11);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, &sig) == 1);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, &sig) == 1);
         CHECK(ecount == 11);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, NULL, signature, siglen) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_der(ctx, NULL, signature, siglen) == 0);
         CHECK(ecount == 12);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, NULL, siglen) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, NULL, siglen) == 0);
         CHECK(ecount == 13);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, signature, siglen) == 1);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, signature, siglen) == 1);
         CHECK(ecount == 13);
         siglen = 10;
         /* Too little room for a signature does not fail via ARGCHECK. */
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, &sig) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(ctx, signature, &siglen, &sig) == 0);
         CHECK(ecount == 13);
         ecount = 0;
-        CHECK(geth_geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, NULL) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_normalize(ctx, NULL, NULL) == 0);
         CHECK(ecount == 1);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_compact(ctx, NULL, &sig) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_compact(ctx, NULL, &sig) == 0);
         CHECK(ecount == 2);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_compact(ctx, signature, NULL) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_compact(ctx, signature, NULL) == 0);
         CHECK(ecount == 3);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig) == 1);
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_compact(ctx, signature, &sig) == 1);
         CHECK(ecount == 3);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, NULL, signature) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_compact(ctx, NULL, signature) == 0);
         CHECK(ecount == 4);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, NULL) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, NULL) == 0);
         CHECK(ecount == 5);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, signature) == 1);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, signature) == 1);
         CHECK(ecount == 5);
         memset(signature, 255, 64);
-        CHECK(geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, signature) == 0);
+        CHECK(geth_secp256k1_ecdsa_signature_parse_compact(ctx, &sig, signature) == 0);
         CHECK(ecount == 5);
         geth_secp256k1_context_set_illegal_callback(ctx, NULL, NULL);
     }

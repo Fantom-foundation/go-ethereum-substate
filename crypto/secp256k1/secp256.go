@@ -84,7 +84,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 		noncefunc = C.geth_secp256k1_nonce_function_rfc6979
 		sigstruct C.geth_secp256k1_ecdsa_recoverable_signature
 	)
-	if C.geth_geth_secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
+	if C.geth_secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
 		return nil, ErrSignFailed
 	}
 
@@ -93,7 +93,7 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 		sigdata = (*C.uchar)(unsafe.Pointer(&sig[0]))
 		recid   C.int
 	)
-	C.geth_geth_secp256k1_ecdsa_recoverable_signature_serialize_compact(context, sigdata, &recid, &sigstruct)
+	C.geth_secp256k1_ecdsa_recoverable_signature_serialize_compact(context, sigdata, &recid, &sigstruct)
 	sig[64] = byte(recid) // add back recid to get 65 bytes sig
 	return sig, nil
 }

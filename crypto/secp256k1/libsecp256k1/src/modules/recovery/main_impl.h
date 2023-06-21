@@ -35,7 +35,7 @@ static void geth_secp256k1_ecdsa_recoverable_signature_save(geth_secp256k1_ecdsa
     sig->data[64] = recid;
 }
 
-int geth_geth_secp256k1_ecdsa_recoverable_signature_parse_compact(const secp256k1_context* ctx, geth_secp256k1_ecdsa_recoverable_signature* sig, const unsigned char *input64, int recid) {
+int geth_secp256k1_ecdsa_recoverable_signature_parse_compact(const secp256k1_context* ctx, geth_secp256k1_ecdsa_recoverable_signature* sig, const unsigned char *input64, int recid) {
     secp256k1_scalar r, s;
     int ret = 1;
     int overflow = 0;
@@ -57,7 +57,7 @@ int geth_geth_secp256k1_ecdsa_recoverable_signature_parse_compact(const secp256k
     return ret;
 }
 
-int geth_geth_secp256k1_ecdsa_recoverable_signature_serialize_compact(const secp256k1_context* ctx, unsigned char *output64, int *recid, const geth_secp256k1_ecdsa_recoverable_signature* sig) {
+int geth_secp256k1_ecdsa_recoverable_signature_serialize_compact(const secp256k1_context* ctx, unsigned char *output64, int *recid, const geth_secp256k1_ecdsa_recoverable_signature* sig) {
     secp256k1_scalar r, s;
 
     (void)ctx;
@@ -71,7 +71,7 @@ int geth_geth_secp256k1_ecdsa_recoverable_signature_serialize_compact(const secp
     return 1;
 }
 
-int geth_geth_secp256k1_ecdsa_recoverable_signature_convert(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const geth_secp256k1_ecdsa_recoverable_signature* sigin) {
+int geth_secp256k1_ecdsa_recoverable_signature_convert(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const geth_secp256k1_ecdsa_recoverable_signature* sigin) {
     secp256k1_scalar r, s;
     int recid;
 
@@ -120,7 +120,7 @@ static int secp256k1_ecdsa_sig_recover(const secp256k1_ecmult_context *ctx, cons
     return !secp256k1_gej_is_infinity(&qj);
 }
 
-int geth_geth_secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, geth_secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msg32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
+int geth_secp256k1_ecdsa_sign_recoverable(const secp256k1_context* ctx, geth_secp256k1_ecdsa_recoverable_signature *signature, const unsigned char *msg32, const unsigned char *seckey, secp256k1_nonce_function noncefp, const void* noncedata) {
     secp256k1_scalar r, s;
     secp256k1_scalar sec, non, msg;
     int recid;

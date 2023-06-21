@@ -26,8 +26,8 @@
  * certain violations are easily supported. You may need to adapt it.
  *
  * Do not use this for new systems. Use well-defined DER or compact signatures
- * instead if you have the choice (see geth_geth_secp256k1_ecdsa_signature_parse_der and
- * geth_geth_secp256k1_ecdsa_signature_parse_compact).
+ * instead if you have the choice (see geth_secp256k1_ecdsa_signature_parse_der and
+ * geth_secp256k1_ecdsa_signature_parse_compact).
  *
  * The supported violations are:
  * - All numbers are parsed as nonnegative integers, even though X.609-0207

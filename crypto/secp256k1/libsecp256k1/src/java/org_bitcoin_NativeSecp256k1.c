@@ -55,7 +55,7 @@ SECP256K1_API jint JNICALL Java_org_bitcoin_NativeSecp256k1_secp256k1_1ecdsa_1ve
   geth_secp256k1_ecdsa_signature sig;
   secp256k1_pubkey pubkey;
 
-  int ret = geth_geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, sigdata, siglen);
+  int ret = geth_secp256k1_ecdsa_signature_parse_der(ctx, &sig, sigdata, siglen);
 
   if( ret ) {
     ret = geth_secp256k1_ec_pubkey_parse(ctx, &pubkey, pubdata, publen);
@@ -89,7 +89,7 @@ SECP256K1_API jobjectArray JNICALL Java_org_bitcoin_NativeSecp256k1_secp256k1_1e
   size_t outputLen = 72;
 
   if( ret ) {
-    int ret2 = geth_geth_secp256k1_ecdsa_signature_serialize_der(ctx,outputSer, &outputLen, sig ); (void)ret2;
+    int ret2 = geth_secp256k1_ecdsa_signature_serialize_der(ctx,outputSer, &outputLen, sig ); (void)ret2;
   }
 
   intsarray[0] = outputLen;

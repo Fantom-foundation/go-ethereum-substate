@@ -207,7 +207,7 @@ static void geth_secp256k1_ecdsa_signature_save(geth_secp256k1_ecdsa_signature* 
     }
 }
 
-int geth_geth_secp256k1_ecdsa_signature_parse_der(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const unsigned char *input, size_t inputlen) {
+int geth_secp256k1_ecdsa_signature_parse_der(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const unsigned char *input, size_t inputlen) {
     secp256k1_scalar r, s;
 
     VERIFY_CHECK(ctx != NULL);
@@ -223,7 +223,7 @@ int geth_geth_secp256k1_ecdsa_signature_parse_der(const secp256k1_context* ctx, 
     }
 }
 
-int geth_geth_secp256k1_ecdsa_signature_parse_compact(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const unsigned char *input64) {
+int geth_secp256k1_ecdsa_signature_parse_compact(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature* sig, const unsigned char *input64) {
     secp256k1_scalar r, s;
     int ret = 1;
     int overflow = 0;
@@ -244,7 +244,7 @@ int geth_geth_secp256k1_ecdsa_signature_parse_compact(const secp256k1_context* c
     return ret;
 }
 
-int geth_geth_secp256k1_ecdsa_signature_serialize_der(const secp256k1_context* ctx, unsigned char *output, size_t *outputlen, const geth_secp256k1_ecdsa_signature* sig) {
+int geth_secp256k1_ecdsa_signature_serialize_der(const secp256k1_context* ctx, unsigned char *output, size_t *outputlen, const geth_secp256k1_ecdsa_signature* sig) {
     secp256k1_scalar r, s;
 
     VERIFY_CHECK(ctx != NULL);
@@ -256,7 +256,7 @@ int geth_geth_secp256k1_ecdsa_signature_serialize_der(const secp256k1_context* c
     return secp256k1_ecdsa_sig_serialize(output, outputlen, &r, &s);
 }
 
-int geth_geth_secp256k1_ecdsa_signature_serialize_compact(const secp256k1_context* ctx, unsigned char *output64, const geth_secp256k1_ecdsa_signature* sig) {
+int geth_secp256k1_ecdsa_signature_serialize_compact(const secp256k1_context* ctx, unsigned char *output64, const geth_secp256k1_ecdsa_signature* sig) {
     secp256k1_scalar r, s;
 
     VERIFY_CHECK(ctx != NULL);
@@ -269,7 +269,7 @@ int geth_geth_secp256k1_ecdsa_signature_serialize_compact(const secp256k1_contex
     return 1;
 }
 
-int geth_geth_secp256k1_ecdsa_signature_normalize(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature *sigout, const geth_secp256k1_ecdsa_signature *sigin) {
+int geth_secp256k1_ecdsa_signature_normalize(const secp256k1_context* ctx, geth_secp256k1_ecdsa_signature *sigout, const geth_secp256k1_ecdsa_signature *sigin) {
     secp256k1_scalar r, s;
     int ret = 0;
 

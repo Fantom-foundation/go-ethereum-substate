@@ -36,7 +36,7 @@ static void bench_sign(void* arg) {
         int j;
         geth_secp256k1_ecdsa_signature signature;
         CHECK(geth_secp256k1_ecdsa_sign(data->ctx, &signature, data->msg, data->key, NULL, NULL));
-        CHECK(geth_geth_secp256k1_ecdsa_signature_serialize_der(data->ctx, sig, &siglen, &signature));
+        CHECK(geth_secp256k1_ecdsa_signature_serialize_der(data->ctx, sig, &siglen, &signature));
         for (j = 0; j < 32; j++) {
             data->msg[j] = sig[j];
             data->key[j] = sig[j + 32];

@@ -293,7 +293,7 @@ SECP256K1_API int geth_secp256k1_ec_pubkey_serialize(
  *  S are zero, the resulting sig value is guaranteed to fail validation for any
  *  message and public key.
  */
-SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_parse_compact(
+SECP256K1_API int geth_secp256k1_ecdsa_signature_parse_compact(
     const secp256k1_context* ctx,
     geth_secp256k1_ecdsa_signature* sig,
     const unsigned char *input64
@@ -314,7 +314,7 @@ SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_parse_compact(
  *  encoded numbers are out of range, signature validation with it is
  *  guaranteed to fail for every message and public key.
  */
-SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_parse_der(
+SECP256K1_API int geth_secp256k1_ecdsa_signature_parse_der(
     const secp256k1_context* ctx,
     geth_secp256k1_ecdsa_signature* sig,
     const unsigned char *input,
@@ -332,7 +332,7 @@ SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_parse_der(
  *                     if 0 was returned).
  *  In:     sig:       a pointer to an initialized signature object
  */
-SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_serialize_der(
+SECP256K1_API int geth_secp256k1_ecdsa_signature_serialize_der(
     const secp256k1_context* ctx,
     unsigned char *output,
     size_t *outputlen,
@@ -346,9 +346,9 @@ SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_serialize_der(
  *  Out:    output64:  a pointer to a 64-byte array to store the compact serialization
  *  In:     sig:       a pointer to an initialized signature object
  *
- *  See geth_geth_secp256k1_ecdsa_signature_parse_compact for details about the encoding.
+ *  See geth_secp256k1_ecdsa_signature_parse_compact for details about the encoding.
  */
-SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_serialize_compact(
+SECP256K1_API int geth_secp256k1_ecdsa_signature_serialize_compact(
     const secp256k1_context* ctx,
     unsigned char *output64,
     const geth_secp256k1_ecdsa_signature* sig
@@ -367,7 +367,7 @@ SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_serialize_compact(
  * form are accepted.
  *
  * If you need to accept ECDSA signatures from sources that do not obey this
- * rule, apply geth_geth_secp256k1_ecdsa_signature_normalize to the signature prior to
+ * rule, apply geth_secp256k1_ecdsa_signature_normalize to the signature prior to
  * validation, but be aware that doing so results in malleable signatures.
  *
  * For details, see the comments for that function.
@@ -419,9 +419,9 @@ SECP256K1_API SECP256K1_WARN_UNUSED_RESULT int geth_secp256k1_ecdsa_verify(
  *  The geth_secp256k1_ecdsa_sign function will by default create signatures in the
  *  lower-S form, and geth_secp256k1_ecdsa_verify will not accept others. In case
  *  signatures come from a system that cannot enforce this property,
- *  geth_geth_secp256k1_ecdsa_signature_normalize must be called before verification.
+ *  geth_secp256k1_ecdsa_signature_normalize must be called before verification.
  */
-SECP256K1_API int geth_geth_secp256k1_ecdsa_signature_normalize(
+SECP256K1_API int geth_secp256k1_ecdsa_signature_normalize(
     const secp256k1_context* ctx,
     geth_secp256k1_ecdsa_signature *sigout,
     const geth_secp256k1_ecdsa_signature *sigin
@@ -448,7 +448,7 @@ SECP256K1_API extern const secp256k1_nonce_function geth_secp256k1_nonce_functio
  *           ndata:  pointer to arbitrary data used by the nonce generation function (can be NULL)
  *
  * The created signature is always in lower-S form. See
- * geth_geth_secp256k1_ecdsa_signature_normalize for more details.
+ * geth_secp256k1_ecdsa_signature_normalize for more details.
  */
 SECP256K1_API int geth_secp256k1_ecdsa_sign(
     const secp256k1_context* ctx,

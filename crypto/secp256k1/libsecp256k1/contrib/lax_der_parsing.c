@@ -17,7 +17,7 @@ int ecdsa_signature_parse_der_lax(const secp256k1_context* ctx, geth_secp256k1_e
     int overflow = 0;
 
     /* Hack to initialize sig with a correctly-parsed but invalid signature. */
-    geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
+    geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
 
     /* Sequence tag byte */
     if (pos == inputlen || input[pos] != 0x30) {
@@ -139,11 +139,11 @@ int ecdsa_signature_parse_der_lax(const secp256k1_context* ctx, geth_secp256k1_e
     }
 
     if (!overflow) {
-        overflow = !geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
+        overflow = !geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
     }
     if (overflow) {
         memset(tmpsig, 0, 64);
-        geth_geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
+        geth_secp256k1_ecdsa_signature_parse_compact(ctx, sig, tmpsig);
     }
     return 1;
 }
