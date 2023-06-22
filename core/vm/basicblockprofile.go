@@ -34,8 +34,8 @@ var BasicBlockProfilingDB string
 // numRecords is the maximal number of records per SQLITE3 transaction for writing.
 const numRecords = 1000
 
-// channelSize sets the buffer size for basic-block profiling.
-const channelSize = 10000
+// BasicBlockProfilingBufferSize sets the buffer size for basic-block profiling.
+var BasicBlockProfilingBufferSize int = 10000
 
 // BasicBlockInfo contains runtime information of a basic block.
 type BasicBlockInfo struct {
@@ -62,7 +62,7 @@ type BasicBlockKey struct {
 type BasicBlockProfileStatistic map[BasicBlockKey]BasicBlockInfo
 
 // bbpChannel is the basic-block profiling channel.
-var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, channelSize)
+var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, BasicBlockProfilingBufferSize)
 
 // NewBasicBlockProfileStatistics creates a new basic-block statistic
 func NewBasicBlockProfileStatistic() BasicBlockProfileStatistic {
@@ -130,14 +130,14 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	}
 
 	// create new table
-	const createBasicBlockFrequency string = `
+	const createBasicBlockTable string = `
 	CREATE TABLE BasicBlockProfile (
 	 contract TEXT,
 	 address NUMERIC,
 	 frequency NUMERIC,
 	 duration NUMERIC
 	);`
-	_, err = db.Exec(createBasicBlockFrequency)
+	_, err = db.Exec(createBasicBlockTable)
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
@@ -150,7 +150,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	}
 
 	// prepare the insert statement for faster inserts
-	insertFrequency := `INSERT INTO BasicBlockFrequency(contract, address, frequency, duration) VALUES (?, ?, ?, ?)`
+	insertFrequency := `INSERT INTO BasicBlockProfile(contract, address, frequency, duration) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
