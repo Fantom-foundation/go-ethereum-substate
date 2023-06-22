@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"hash"
 	syslog "log"
 	"strings"
@@ -548,11 +549,14 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 	basicBlockTimer := time.Now()
 
 	defer func() {
+		// elapsed time to last block
+		elapsed := time.Since(basicBlockTimer)
 		// update last block
 		bb := basicBlockData[prevJumpDestAddr]
 		bb.Frequency++
-		bb.Duration = time.Since(basicBlockTimer)
+		bb.Duration += elapsed
 		basicBlockData[prevJumpDestAddr] = bb
+		fmt.Printf("%v,%v,%v\n", contract.CodeHash.Hex(), prevJumpDestAddr, elapsed)
 
 		// process basic block frequencies
 		bbpd := BasicBlockProfileData{
@@ -652,12 +656,14 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 
 		// update basic block frequency and duration for last basic block
 		if op == JUMPDEST {
+			elapsed := time.Since(basicBlockTimer)
 			bb := basicBlockData[prevJumpDestAddr]
 			bb.Frequency++
-			bb.Duration = time.Since(basicBlockTimer)
+			bb.Duration += elapsed
 			basicBlockData[prevJumpDestAddr] = bb
-			basicBlockTimer = time.Now()
 			prevJumpDestAddr = uint32(pc)
+			fmt.Printf("%v,%v,%v\n", contract.CodeHash.Hex(), prevJumpDestAddr, elapsed)
+			basicBlockTimer = time.Now()
 		}
 		res, err = operation.execute(&pc, in, callContext)
 
