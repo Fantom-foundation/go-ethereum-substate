@@ -48,14 +48,14 @@ type ContractInvocation map[uint32]BasicBlockInfo
 
 // BasiBlockProfileData record for a single smart contract invocation.
 type BasicBlockProfileData struct {
-	ContractHash string             // contract hash of smart contract
-	ProfileInfo  ContractInvocation // profiling information of an invocation
+	CodeHash    string             // code-hash of contract
+	ProfileInfo ContractInvocation // profiling information of an invocation
 }
 
 // BasicBlockKey uses contract hash and code address of basic block as a key.
 type BasicBlockKey struct {
-	ContractHash string // contract in hex format
-	Address      uint32 // basic-block code address
+	CodeHash string // code-hash of contract
+	Address  uint32 // code address (begin of a basic block)
 }
 
 // BasicBlockProfileStatistics for contracts/invocations.
@@ -80,7 +80,7 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 		case bbpd := <-bbpChannel:
 			for addr, info := range bbpd.ProfileInfo {
 				// construct new key for stats
-				key := BasicBlockKey{ContractHash: bbpd.ContractHash, Address: addr}
+				key := BasicBlockKey{CodeHash: bbpd.CodeHash, Address: addr}
 
 				// update stats
 				sinfo := bbps[key]
@@ -132,7 +132,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	// create new table
 	const createBasicBlockTable string = `
 	CREATE TABLE BasicBlockProfile (
-	 contract TEXT,
+	 code_hash TEXT,
 	 address NUMERIC,
 	 frequency NUMERIC,
 	 duration NUMERIC
@@ -150,7 +150,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	}
 
 	// prepare the insert statement for faster inserts
-	insertFrequency := `INSERT INTO BasicBlockProfile(contract, address, frequency, duration) VALUES (?, ?, ?, ?)`
+	insertFrequency := `INSERT INTO BasicBlockProfile(code_hash, address, frequency, duration) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -169,7 +169,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 		} else {
 			ctr++
 		}
-		_, err = statement.Exec(key.ContractHash, key.Address, info.Frequency, info.Duration)
+		_, err = statement.Exec(key.CodeHash, key.Address, info.Frequency, info.Duration)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
