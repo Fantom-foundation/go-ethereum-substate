@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/hex"
 	"hash"
 	syslog "log"
 	"strings"
@@ -546,6 +547,7 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 	// prime basic block timer and set previous JUMPDEST address to zero.
 	prevJumpDestAddr := uint32(0)
 	basicBlockTimer := time.Now()
+	callTime := time.Duration(0)
 
 	defer func() {
 		// elapsed time to last block
@@ -554,12 +556,12 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 		// update last block
 		bb := basicBlockData[prevJumpDestAddr]
 		bb.Frequency++
-		bb.Duration += elapsed
+		bb.Duration += elapsed - callTime
 		basicBlockData[prevJumpDestAddr] = bb
 
 		// process basic block frequencies
 		bbpd := BasicBlockProfileData{
-			CodeHash:    contract.CodeHash.Hex(),
+			CodeId:      CodeLookup(hex.EncodeToString(contract.Code)),
 			ProfileInfo: basicBlockData}
 		ProcessBasicBlockProfileData(&bbpd)
 	}()
@@ -589,8 +591,21 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
+
+		start := time.Now()
 		op = contract.GetOp(pc)
 		operation := in.cfg.JumpTable[op]
+		elapsed := time.Since(start)
+
+		if op == CREATE ||
+			op == CREATE2 ||
+			op == CALL ||
+			op == CALLCODE ||
+			op == DELEGATECALL ||
+			op == STATICCALL {
+			callTime += elapsed
+		}
+
 		if operation == nil {
 			return nil, &ErrInvalidOpCode{opcode: op}
 		}
@@ -659,10 +674,11 @@ func (in *GethEVMInterpreter) runBasicBlockProfiling(state *InterpreterState, in
 
 			bb := basicBlockData[prevJumpDestAddr]
 			bb.Frequency++
-			bb.Duration += elapsed
+			bb.Duration += elapsed - callTime
 			basicBlockData[prevJumpDestAddr] = bb
 
 			prevJumpDestAddr = uint32(pc)
+			callTime = 0
 			basicBlockTimer = time.Now()
 		}
 		res, err = operation.execute(&pc, in, callContext)

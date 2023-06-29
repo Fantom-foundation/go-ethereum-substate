@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -46,27 +47,42 @@ type BasicBlockInfo struct {
 // ContractInvocation contains basic-block infos for one invocation.
 type ContractInvocation map[uint32]BasicBlockInfo
 
-// BasiBlockProfileData record for a single smart contract invocation.
-type BasicBlockProfileData struct {
-	CodeHash    string             // code-hash of contract
-	ProfileInfo ContractInvocation // profiling information of an invocation
-}
-
-// BasicBlockKey uses contract hash and code address of basic block as a key.
+// BasicBlockKey uses code id and code address of basic block as a key.
 type BasicBlockKey struct {
-	CodeHash string // code-hash of contract
-	Address  uint32 // code address (begin of a basic block)
+	CodeId  int    // code id of contract
+	Address uint32 // code address (begin of a basic block)
 }
 
 // BasicBlockProfileStatistics for contracts/invocations.
 type BasicBlockProfileStatistic map[BasicBlockKey]BasicBlockInfo
 
-// bbpChannel is the basic-block profiling channel.
-var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, BasicBlockProfilingBufferSize)
-
 // NewBasicBlockProfileStatistics creates a new basic-block statistic
 func NewBasicBlockProfileStatistic() BasicBlockProfileStatistic {
 	return make(map[BasicBlockKey]BasicBlockInfo)
+}
+
+// Merge two basic-block profiling statistics.
+func (bbps BasicBlockProfileStatistic) Merge(src BasicBlockProfileStatistic) {
+	for key, info := range src {
+		sinfo := bbps[key]
+		sinfo.Frequency += info.Frequency
+		sinfo.Duration += info.Duration
+		bbps[key] = sinfo
+	}
+}
+
+// BasiBlockProfileData record for a single smart contract invocation.
+type BasicBlockProfileData struct {
+	CodeId      int                // code id of contract
+	ProfileInfo ContractInvocation // profiling information of an invocation
+}
+
+// bbpChannel is the basic-block profiling channel.
+var bbpChannel chan *BasicBlockProfileData = make(chan *BasicBlockProfileData, BasicBlockProfilingBufferSize)
+
+// ProcessBasicBlockProfileData puts a new record into profiling channel.
+func ProcessBasicBlockProfileData(bbpd *BasicBlockProfileData) {
+	bbpChannel <- bbpd
 }
 
 // BasicBlockProfilingCollector is the data collector that collects basic-block profiling
@@ -80,7 +96,7 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 		case bbpd := <-bbpChannel:
 			for addr, info := range bbpd.ProfileInfo {
 				// construct new key for stats
-				key := BasicBlockKey{CodeHash: bbpd.CodeHash, Address: addr}
+				key := BasicBlockKey{CodeId: bbpd.CodeId, Address: addr}
 
 				// update stats
 				sinfo := bbps[key]
@@ -98,19 +114,23 @@ func BasicBlockProfilingCollector(ctx context.Context, done chan struct{}, bbps 
 	}
 }
 
-// ProcessBasicBlockProfileData puts a new record into profiling channel.
-func ProcessBasicBlockProfileData(bbpd *BasicBlockProfileData) {
-	bbpChannel <- bbpd
-}
+// codeMutex for avoiding data races looking up code
+var codeMutex sync.Mutex
 
-// Merge two basic-block profiling statistics.
-func (bbps BasicBlockProfileStatistic) Merge(src BasicBlockProfileStatistic) {
-	for key, info := range src {
-		sinfo := bbps[key]
-		sinfo.Frequency += info.Frequency
-		sinfo.Duration += info.Duration
-		bbps[key] = sinfo
+// codeDictionary converts code (in hex format) to a unique ID for later lookup
+var codeDictionary map[string]int = map[string]int{}
+
+func CodeLookup(code string) int {
+	codeMutex.Lock()
+	var (
+		id int
+		ok bool
+	)
+	if id, ok = codeDictionary[code]; !ok {
+		codeDictionary[code] = len(codeDictionary)
 	}
+	codeMutex.Unlock()
+	return id
 }
 
 // Dump basic block frequency stats into a SQLITE3 database
@@ -132,10 +152,10 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	// create new table
 	const createBasicBlockTable string = `
 	CREATE TABLE BasicBlockProfile (
-	 code_hash TEXT,
-	 address NUMERIC,
-	 frequency NUMERIC,
-	 duration NUMERIC
+	 code_id INTEGER,
+	 address INTEGER,
+	 frequency INTEGER,
+	 duration REAL
 	);`
 	_, err = db.Exec(createBasicBlockTable)
 	if err != nil {
@@ -150,7 +170,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	}
 
 	// prepare the insert statement for faster inserts
-	insertFrequency := `INSERT INTO BasicBlockProfile(code_hash, address, frequency, duration) VALUES (?, ?, ?, ?)`
+	insertFrequency := `INSERT INTO BasicBlockProfile(code_id, address, frequency, duration) VALUES (?, ?, ?, ?)`
 	statement, err := db.Prepare(insertFrequency)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -169,7 +189,7 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 		} else {
 			ctr++
 		}
-		_, err = statement.Exec(key.CodeHash, key.Address, info.Frequency, info.Duration)
+		_, err = statement.Exec(key.CodeId, key.Address, info.Frequency, float64(info.Duration.Nanoseconds())/1e9)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -180,5 +200,38 @@ func (bbps BasicBlockProfileStatistic) Dump() {
 	_, err = db.Exec("END TRANSACTION;")
 	if err != nil {
 		log.Fatalln(err.Error())
+	}
+
+	// drop code table
+	const dropCode string = `DROP TABLE IF EXISTS Code;`
+	_, err = db.Exec(dropCode)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// create new table
+	const createCode string = `
+	CREATE TABLE Code (
+	 code_id INTEGER PRIMARY KEY,
+	 code TEXT
+	);`
+	_, err = db.Exec(createCode)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// prepare the insert statement for faster inserts
+	insertCode := `INSERT INTO Code(code_id, code) VALUES (?, ?)`
+	statement, err = db.Prepare(insertCode)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	// dump code
+	for code, id := range codeDictionary {
+		_, err = statement.Exec(id, code)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
 	}
 }
