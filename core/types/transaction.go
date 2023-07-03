@@ -569,6 +569,25 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 	heap.Pop(&t.heads)
 }
 
+// GetCountToPop provides the amount of txs, which will be removed if Pop is called
+func (t *TransactionsByPriceAndNonce) GetCountToPop() int {
+	acc, _ := Sender(t.signer, t.heads[0].tx)
+	if txs, ok := t.txs[acc]; ok {
+		return len(txs) + 1
+	}
+	return 0
+}
+
+// Len provides the total amount of txs in the structure
+func (t *TransactionsByPriceAndNonce) Len() int {
+	length := 0
+	for _, head := range t.heads {
+		acc, _ := Sender(t.signer, head.tx)
+		length += len(t.txs[acc]) + 1
+	}
+	return length
+}
+
 func (t *TransactionsByPriceAndNonce) Copy() *TransactionsByPriceAndNonce {
 	txsCopy := make(map[common.Address]Transactions, len(t.txs))
 	for k, v := range t.txs {

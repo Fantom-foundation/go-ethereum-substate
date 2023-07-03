@@ -527,3 +527,37 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 	}
 	return nil
 }
+
+func TestTransactionsByPriceAndNonceLen(t *testing.T) {
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+	}
+	signer := HomesteadSigner{}
+	groups := map[common.Address]Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for nonce := uint64(0); nonce < 5; nonce++ {
+			tx, _ := SignTx(NewTransaction(nonce, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+			groups[addr] = append(groups[addr], tx)
+		}
+	}
+	txset := NewTransactionsByPriceAndNonce(signer, groups, nil)
+	if txset.Len() != 25 {
+		t.Errorf("intial len is %d", txset.Len())
+	}
+	if txset.GetCountToPop() != 5 {
+		t.Errorf("intial amount to pop is %d", txset.GetCountToPop())
+	}
+	txset.Pop()
+	if txset.Len() != 20 {
+		t.Errorf("length after first pop is %d", txset.Len())
+	}
+	txset.Shift()
+	if txset.Len() != 19 {
+		t.Errorf("length after shift is %d", txset.Len())
+	}
+	if txset.GetCountToPop() != 4 {
+		t.Errorf("amount to pop after shift is %d", txset.GetCountToPop())
+	}
+}
