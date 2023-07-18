@@ -534,20 +534,28 @@ type CachedSigner struct {
 	cache SenderCache
 }
 
-func WrapWithCachedSigner(signer Signer, cache SenderCache) *CachedSigner {
-	return &CachedSigner{
+func WrapWithCachedSigner(signer Signer, cache SenderCache) CachedSigner {
+	return CachedSigner{
 		Signer: signer,
 		cache:  cache,
 	}
 }
 
+
+func (cs CachedSigner) Equal(s2 Signer) bool {
+	cs2, ok := s2.(CachedSigner)
+	if ok {
+		// unwrap the signer
+		return cs.Signer.Equal(cs2.Signer)
+	}
+	return cs.Signer.Equal(s2)
+}
+
 func (cs CachedSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.from.Load() == nil {
-		// try to load the sender from the global cache
-		cached := cs.cache.Get(tx.Hash())
-		if cached != nil && cached.Signer.Equal(cs.Signer) {
-			return cached.From, nil
-		}
+	// try to load the sender from the global cache
+	cached := cs.cache.Get(tx.Hash())
+	if cached != nil && cached.Signer.Equal(cs.Signer) {
+		return cached.From, nil
 	}
 	from, err := cs.Signer.Sender(tx)
 	if err != nil {
