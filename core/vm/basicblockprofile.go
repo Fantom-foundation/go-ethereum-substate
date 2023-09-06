@@ -128,6 +128,7 @@ func CodeLookup(code string) int {
 	)
 	if id, ok = codeDictionary[code]; !ok {
 		codeDictionary[code] = len(codeDictionary)
+		id = len(codeDictionary) - 1
 	}
 	codeMutex.Unlock()
 	return id
