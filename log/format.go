@@ -35,7 +35,15 @@ func PrintOrigins(print bool) {
 	} else {
 		atomic.StoreUint32(&locationEnabled, 0)
 	}
+	if print {
+		stackEnabled.Store(true)
+	}
 }
+
+// stackEnabled is an atomic flag controlling whether the log handler needs
+// to store the callsite stack. This is needed in case any handler wants to
+// print locations (locationEnabled), use vmodule, or print full stacks (BacktraceAt).
+var stackEnabled atomic.Bool
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
 // should append the log locations too when printing entries.
