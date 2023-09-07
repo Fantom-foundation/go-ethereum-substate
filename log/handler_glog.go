@@ -140,6 +140,10 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	h.siteCache = make(map[uintptr]Lvl)
 	atomic.StoreUint32(&h.override, uint32(len(filter)))
 
+	// Enable location storage (globally)
+	if len(h.patterns) > 0 {
+		stackEnabled.Store(true)
+	}
 	return nil
 }
 
@@ -173,6 +177,8 @@ func (h *GlogHandler) BacktraceAt(location string) error {
 	h.location = location
 	atomic.StoreUint32(&h.backtrace, uint32(len(location)))
 
+	// Enable location storage (globally)
+	stackEnabled.Store(true)
 	return nil
 }
 
