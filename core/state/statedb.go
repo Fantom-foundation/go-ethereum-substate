@@ -1137,6 +1137,10 @@ func (s *LegacyStateDB) EndBlock(number uint64) {
 	// not used by LegacyStateDB
 }
 
+func (s *LegacyStateDB) Release() {
+	// not used by LegacyStateDB
+}
+
 func (s *LegacyStateDB) GetAccountReads() time.Duration {
 	return s.AccountReads
 }

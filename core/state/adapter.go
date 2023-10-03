@@ -83,6 +83,7 @@ type StateDbInterface interface {
 	GetSubstatePostAlloc() substate.SubstateAlloc
 	BeginBlock(number uint64)
 	EndBlock(number uint64)
+	Release()
 }
 
 type StateDB struct {
