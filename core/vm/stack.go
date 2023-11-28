@@ -36,7 +36,7 @@ type Stack struct {
 	data []uint256.Int
 }
 
-func newstack() *Stack {
+func NewStack() *Stack {
 	return stackPool.Get().(*Stack)
 }
 
@@ -53,6 +53,9 @@ func (st *Stack) Data() []uint256.Int {
 func (st *Stack) push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	st.data = append(st.data, *d)
+}
+func (st *Stack) Push(d *uint256.Int) {
+	st.push(d)
 }
 func (st *Stack) pushN(ds ...uint256.Int) {
 	// FIXME: Is there a way to pass args by pointers.
