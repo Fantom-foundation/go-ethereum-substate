@@ -54,6 +54,9 @@ func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
 	}
 	return 0, nil
 }
+func MemoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
+	return memoryGasCost(mem, newMemSize)
+}
 
 // memoryCopierGas creates the gas functions for the following opcodes, and takes
 // the stack position of the operand which determines the size of the data to copy
