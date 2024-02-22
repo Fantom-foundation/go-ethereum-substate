@@ -829,6 +829,7 @@ type GethState struct {
 	Result      []byte // result of the opcode execution function
 	Err         error
 	CallContext *ScopeContext
+	ReadOnly    bool
 	Halted      bool
 
 	op   OpCode // current opcode
@@ -858,6 +859,12 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 	if in.cfg.Debug {
 		// Capture pre-execution values for tracing.
 		state.logged, state.pcCopy, state.gasCopy = false, state.Pc, state.Contract.Gas
+	}
+
+	// Propagate the read-only flag.
+	if in.readOnly != state.ReadOnly {
+		defer func() { in.readOnly = !in.readOnly }()
+		in.readOnly = state.ReadOnly
 	}
 
 	// Get the operation from the jump table and validate the stack to ensure there are
