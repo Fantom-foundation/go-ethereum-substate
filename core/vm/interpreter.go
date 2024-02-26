@@ -862,9 +862,9 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 	}
 
 	// Propagate the read-only flag.
-	if in.readOnly != state.ReadOnly {
-		defer func() { in.readOnly = !in.readOnly }()
-		in.readOnly = state.ReadOnly
+	if state.ReadOnly && !in.readOnly {
+		defer func() { in.readOnly = false }()
+		in.readOnly = true
 	}
 
 	// Get the operation from the jump table and validate the stack to ensure there are
