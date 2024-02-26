@@ -940,12 +940,14 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 		state.logged = true
 	}
 
-	state.Result, state.Err = operation.execute(&state.Pc, in, state.CallContext)
+	var ret []byte
+	ret, state.Err = operation.execute(&state.Pc, in, state.CallContext)
 
 	// if the operation clears the return data (e.g. it has returning data)
 	// set the last return to the result of the operation.
 	if operation.returns {
-		in.returnData = state.Result
+		in.returnData = ret
+		state.Result = ret
 	}
 
 	switch {
