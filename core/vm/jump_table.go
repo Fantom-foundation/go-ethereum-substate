@@ -1020,6 +1020,7 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
 			halts:      true,
+			returns:    true,
 		},
 		SELFDESTRUCT: {
 			execute:    opSuicide,
