@@ -940,6 +940,7 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 		state.logged = true
 	}
 
+	in.returnData = state.Result
 	var ret []byte
 	ret, state.Err = operation.execute(&state.Pc, in, state.CallContext)
 
