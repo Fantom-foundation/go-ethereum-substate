@@ -855,6 +855,17 @@ func NewGethState(contract *Contract, memory *Memory, stack *Stack, Pc uint64) *
 	}
 }
 
+func (in *GethEVMInterpreter) StepN(state *GethState, numSteps int) bool {
+	in.returnData = state.Result
+
+	for i := 0; i < numSteps && !state.Halted; i++ {
+		if !in.Step(state) {
+			return false
+		}
+	}
+	return true
+}
+
 func (in *GethEVMInterpreter) Step(state *GethState) bool {
 	if in.cfg.Debug {
 		// Capture pre-execution values for tracing.
@@ -940,7 +951,6 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 		state.logged = true
 	}
 
-	in.returnData = state.Result
 	var ret []byte
 	ret, state.Err = operation.execute(&state.Pc, in, state.CallContext)
 
