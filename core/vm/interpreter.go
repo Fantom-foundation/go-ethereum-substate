@@ -806,7 +806,7 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 			break
 		}
 
-		if !in.Step(gethState) {
+		if !in.step(gethState) {
 			break
 		}
 	}
@@ -858,24 +858,27 @@ func NewGethState(contract *Contract, memory *Memory, stack *Stack, Pc uint64) *
 func (in *GethEVMInterpreter) StepN(state *GethState, numSteps int) bool {
 	in.returnData = state.Result
 
+	// Propagate the read-only flag.
+	if state.ReadOnly && !in.readOnly {
+		in.readOnly = true
+	}
+
 	for i := 0; i < numSteps && !state.Halted; i++ {
-		if !in.Step(state) {
+		if !in.step(state) {
 			return false
 		}
 	}
 	return true
 }
 
-func (in *GethEVMInterpreter) Step(state *GethState) bool {
+func (in *GethEVMInterpreter) step(state *GethState) bool {
 	if in.cfg.Debug {
 		// Capture pre-execution values for tracing.
 		state.logged, state.pcCopy, state.gasCopy = false, state.Pc, state.Contract.Gas
 	}
 
-	// Propagate the read-only flag.
-	if state.ReadOnly && !in.readOnly {
+	if in.readOnly {
 		defer func() { in.readOnly = false }()
-		in.readOnly = true
 	}
 
 	// Get the operation from the jump table and validate the stack to ensure there are
