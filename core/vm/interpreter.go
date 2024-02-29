@@ -806,7 +806,7 @@ func (in *GethEVMInterpreter) runPlain(state *InterpreterState, input []byte, re
 			break
 		}
 
-		if !in.step(gethState) {
+		if !in.Step(gethState) {
 			break
 		}
 	}
@@ -855,30 +855,22 @@ func NewGethState(contract *Contract, memory *Memory, stack *Stack, Pc uint64) *
 	}
 }
 
-func (in *GethEVMInterpreter) StepN(state *GethState, numSteps int) bool {
-	in.returnData = state.Result
-
-	// Propagate the read-only flag.
-	if state.ReadOnly && !in.readOnly {
-		in.readOnly = true
-	}
-
-	for i := 0; i < numSteps && !state.Halted; i++ {
-		if !in.step(state) {
-			return false
-		}
-	}
-	return true
-}
-
-func (in *GethEVMInterpreter) step(state *GethState) bool {
+func (in *GethEVMInterpreter) Step(state *GethState) bool {
 	if in.cfg.Debug {
 		// Capture pre-execution values for tracing.
 		state.logged, state.pcCopy, state.gasCopy = false, state.Pc, state.Contract.Gas
 	}
 
-	if in.readOnly {
+	// This copies the result state from an input state into the internal state. It is needed
+	// when running conformance tests to get the setup done. It would only be needed once,
+	// but this requires additional refactoring. TODO: fix this!
+	// When running regular contract executions, both fields are always in sync. Thus, this
+	// is effectively a no-op.
+	in.returnData = state.Result
+	// Propagate the read-only flag.
+	if state.ReadOnly && !in.readOnly {
 		defer func() { in.readOnly = false }()
+		in.readOnly = true
 	}
 
 	// Get the operation from the jump table and validate the stack to ensure there are
