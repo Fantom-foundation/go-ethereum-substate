@@ -861,6 +861,12 @@ func (in *GethEVMInterpreter) Step(state *GethState) bool {
 		state.logged, state.pcCopy, state.gasCopy = false, state.Pc, state.Contract.Gas
 	}
 
+	// This copies the result state from an input state into the internal state. It is needed
+	// when running conformance tests to get the setup done. It would only be needed once,
+	// but this requires additional refactoring. TODO: fix this!
+	// When running regular contract executions, both fields are always in sync. Thus, this
+	// is effectively a no-op.
+	in.returnData = state.Result
 	// Propagate the read-only flag.
 	if state.ReadOnly && !in.readOnly {
 		defer func() { in.readOnly = false }()
