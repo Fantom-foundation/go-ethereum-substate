@@ -2,10 +2,10 @@ package state
 
 import (
 	"encoding/json"
+	substate "github.com/Fantom-foundation/Substate"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/substate"
 	"math/big"
 	"time"
 )
