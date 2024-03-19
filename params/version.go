@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-const (
+var (
 	VersionMajor = 1        // Major version component of the current release
 	VersionMinor = 14       // Minor version component of the current release
 	VersionPatch = 3        // Patch version component of the current release
