@@ -34,7 +34,8 @@ type Config struct {
 	EnablePreimageRecording bool  // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int // Additional EIPS that are to be enabled
 
-	StatePrecompiles map[common.Address]PrecompiledStateContract // Added by Fantom for custom precompiled contract
+	StatePrecompiles          map[common.Address]PrecompiledStateContract // Added by Fantom for custom precompiled contract
+	InterpreterImplementation string                                      // The interpreter implementation to be utilized
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
