@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -73,11 +74,15 @@ type Filter func(id ID) error
 
 // NewID calculates the Ethereum fork ID from the chain config, genesis hash, head and time.
 func NewID(config *params.ChainConfig, genesis *types.Block, head, time uint64) ID {
+	return NewId(config, genesis.Hash(), genesis.Time(), head, time)
+}
+
+func NewId(config *params.ChainConfig, genesisHash common.Hash, genesisTime uint64, head, time uint64) ID {
 	// Calculate the starting checksum from the genesis hash
-	hash := crc32.ChecksumIEEE(genesis.Hash().Bytes())
+	hash := crc32.ChecksumIEEE(genesisHash.Bytes())
 
 	// Calculate the current fork checksum and the next fork block
-	forksByBlock, forksByTime := gatherForks(config, genesis.Time())
+	forksByBlock, forksByTime := gatherForks(config, genesisTime)
 	for _, fork := range forksByBlock {
 		if fork <= head {
 			// Fork already passed, checksum the previous hash and the fork number
