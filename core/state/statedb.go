@@ -24,7 +24,10 @@ import (
 	"sort"
 	"time"
 
-	substate "github.com/Fantom-foundation/Substate"
+	rr "github.com/Fantom-foundation/Substate"
+	"github.com/Fantom-foundation/Substate/substate"
+	stypes "github.com/Fantom-foundation/Substate/types"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -121,8 +124,8 @@ type StateDB struct {
 	SnapshotCommits      time.Duration
 
 	// record-replay: SubstatePreAlloc, SubstatePostAlloc, SubstateBlockHashes of StateDB
-	SubstatePreAlloc    substate.SubstateAlloc
-	SubstatePostAlloc   substate.SubstateAlloc
+	SubstatePreAlloc    substate.WorldState
+	SubstatePostAlloc   substate.WorldState
 	SubstateBlockHashes map[uint64]common.Hash
 }
 
@@ -159,10 +162,10 @@ func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, laye
 		}
 	}
 
-	if substate.RecordReplay {
+	if rr.RecordReplay {
 		// init StateDB.Substate*
-		sdb.SubstatePreAlloc = make(substate.SubstateAlloc)
-		sdb.SubstatePostAlloc = make(substate.SubstateAlloc)
+		sdb.SubstatePreAlloc = make(substate.WorldState)
+		sdb.SubstatePostAlloc = make(substate.WorldState)
 		sdb.SubstateBlockHashes = make(map[uint64]common.Hash)
 	}
 
@@ -519,21 +522,23 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 
-		if substate.RecordReplay {
+		if rr.RecordReplay {
+			sAddr := stypes.Address(addr)
 			// insert the account in StateDB.SubstatePreAlloc
-			if _, exist := s.SubstatePreAlloc[addr]; !exist {
-				s.SubstatePreAlloc[addr] = substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+			if _, exist := s.SubstatePreAlloc[sAddr]; !exist {
+				s.SubstatePreAlloc[sAddr] = substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 			}
 		}
 
 		return obj
 	}
 
-	if substate.RecordReplay {
+	if rr.RecordReplay {
+		sAddr := stypes.Address(addr)
 		// insert empty account in StateDB.SubstatePreAlloc
 		// This will prevent insertion of new account created in txs
-		if _, exist := s.SubstatePreAlloc[addr]; !exist {
-			s.SubstatePreAlloc[addr] = nil
+		if _, exist := s.SubstatePreAlloc[sAddr]; !exist {
+			s.SubstatePreAlloc[sAddr] = nil
 		}
 	}
 
@@ -746,10 +751,10 @@ func (s *StateDB) Copy() *StateDB {
 		state.preimages[hash] = preimage
 	}
 
-	if substate.RecordReplay {
+	if rr.RecordReplay {
 		// copy StateDB.Substate*
-		state.SubstatePreAlloc = make(substate.SubstateAlloc)
-		state.SubstatePostAlloc = make(substate.SubstateAlloc)
+		state.SubstatePreAlloc = make(substate.WorldState)
+		state.SubstatePostAlloc = make(substate.WorldState)
 		state.SubstateBlockHashes = make(map[uint64]common.Hash)
 		for addr, account := range s.SubstatePreAlloc {
 			state.SubstatePreAlloc[addr] = account.Copy()
@@ -837,17 +842,19 @@ func (s *StateDB) GetRefund() uint64 {
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
-	if substate.RecordReplay {
+	if rr.RecordReplay {
 		// copy original storage values to Prestate and Poststate
 		for addr, sa := range s.SubstatePreAlloc {
 			if sa == nil {
 				delete(s.SubstatePreAlloc, addr)
 				continue
 			}
-
-			obj := s.stateObjects[addr]
+			ethAddr := common.Address(addr)
+			obj := s.stateObjects[ethAddr]
 			for key := range obj.AccessedStorage {
-				sa.Storage[key] = obj.GetCommittedState(s.db, key)
+				sKey := stypes.Hash(key)
+				sv := stypes.Hash(obj.GetCommittedState(s.db, key))
+				sa.Storage[sKey] = sv
 			}
 			s.SubstatePostAlloc[addr] = sa.Copy()
 		}
@@ -877,18 +884,22 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
-			if substate.RecordReplay {
+			if rr.RecordReplay {
+				sAddr := stypes.Address(addr)
 				// delete account from StateDB.SubstatePostAlloc
-				delete(s.SubstatePostAlloc, addr)
+				delete(s.SubstatePostAlloc, sAddr)
 			}
 		} else {
-			if substate.RecordReplay {
+			if rr.RecordReplay {
+				sAddr := stypes.Address(addr)
 				// copy dirty account to StateDB.SubstatePostAlloc
-				sa := substate.NewSubstateAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+				sa := substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 				for key := range obj.AccessedStorage {
-					sa.Storage[key] = obj.GetState(s.db, key)
+					sKey := stypes.Hash(key)
+					sv := stypes.Hash(obj.GetState(s.db, key))
+					sa.Storage[sKey] = sv
 				}
-				s.SubstatePostAlloc[addr] = sa
+				s.SubstatePostAlloc[sAddr] = sa
 			}
 			obj.finalise(true) // Prefetch slots in the background
 		}
@@ -974,10 +985,10 @@ func (s *StateDB) Prepare(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
 
-	if substate.RecordReplay {
+	if rr.RecordReplay {
 		// reset StateDB.Substate* and stateObject.Substate*
-		s.SubstatePreAlloc = make(substate.SubstateAlloc)
-		s.SubstatePostAlloc = make(substate.SubstateAlloc)
+		s.SubstatePreAlloc = make(substate.WorldState)
+		s.SubstatePostAlloc = make(substate.WorldState)
 		s.SubstateBlockHashes = make(map[uint64]common.Hash)
 		for _, obj := range s.stateObjects {
 			obj.AccessedStorage = make(map[common.Hash]struct{})
@@ -1130,6 +1141,6 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 	return s.accessList.Contains(addr, slot)
 }
 
-func (s *StateDB) GetSubstatePostAlloc() substate.SubstateAlloc {
+func (s *StateDB) GetSubstatePostAlloc() substate.WorldState {
 	return s.SubstatePostAlloc
 }

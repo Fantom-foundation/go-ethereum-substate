@@ -19,10 +19,11 @@ package state
 import (
 	"bytes"
 	"fmt"
-	substate "github.com/Fantom-foundation/Substate"
 	"io"
 	"math/big"
 	"time"
+
+	substate "github.com/Fantom-foundation/Substate"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
