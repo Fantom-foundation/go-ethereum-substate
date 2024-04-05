@@ -784,6 +784,11 @@ var (
 		Name:  "catalyst",
 		Usage: "Catalyst mode (eth2 integration testing)",
 	}
+	// Running Substate recorder
+	RecordingFlag = cli.BoolFlag{
+		Name:  "recording",
+		Usage: "Enable recording for record/replay mechanism.",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating

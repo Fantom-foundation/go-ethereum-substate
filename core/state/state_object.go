@@ -23,8 +23,6 @@ import (
 	"math/big"
 	"time"
 
-	substate "github.com/Fantom-foundation/Substate"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -184,7 +182,7 @@ func (s *stateObject) getTrie(db Database) Trie {
 
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
-	if substate.RecordReplay {
+	if RecordReplay {
 		// mark keys touched by GetState
 		if _, exist := s.AccessedStorage[key]; !exist {
 			s.AccessedStorage[key] = struct{}{}
@@ -336,7 +334,7 @@ func (s *stateObject) finalise(prefetch bool) {
 		s.dirtyStorage = make(Storage)
 	}
 
-	if substate.RecordReplay {
+	if RecordReplay {
 		// clear stateObject.AccessedStorage
 		s.AccessedStorage = make(map[common.Hash]struct{})
 	}
@@ -480,7 +478,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
 
-	if substate.RecordReplay {
+	if RecordReplay {
 		// deepCopy stateObject.AccessedStorage
 		stateObject.AccessedStorage = make(map[common.Hash]struct{})
 		for key := range s.AccessedStorage {
