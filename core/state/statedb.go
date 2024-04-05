@@ -24,7 +24,6 @@ import (
 	"sort"
 	"time"
 
-	rr "github.com/Fantom-foundation/Substate"
 	"github.com/Fantom-foundation/Substate/substate"
 	stypes "github.com/Fantom-foundation/Substate/types"
 
@@ -42,6 +41,12 @@ import (
 type revision struct {
 	id           int
 	journalIndex int
+}
+
+var RecordReplay bool
+
+func EnableRecordReplay() {
+	RecordReplay = true
 }
 
 var (
@@ -123,9 +128,9 @@ type StateDB struct {
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
 
-	// record-replay: SubstatePreAlloc, SubstatePostAlloc, SubstateBlockHashes of StateDB
-	SubstatePreAlloc    substate.WorldState
-	SubstatePostAlloc   substate.WorldState
+	// record-replay: PreWorldState, PostWorldState, SubstateBlockHashes of StateDB
+	PreWorldState       substate.WorldState
+	PostWorldState      substate.WorldState
 	SubstateBlockHashes map[uint64]common.Hash
 }
 
@@ -162,10 +167,10 @@ func NewWithSnapLayers(root common.Hash, db Database, snaps *snapshot.Tree, laye
 		}
 	}
 
-	if rr.RecordReplay {
+	if RecordReplay {
 		// init StateDB.Substate*
-		sdb.SubstatePreAlloc = make(substate.WorldState)
-		sdb.SubstatePostAlloc = make(substate.WorldState)
+		sdb.PreWorldState = make(substate.WorldState)
+		sdb.PostWorldState = make(substate.WorldState)
 		sdb.SubstateBlockHashes = make(map[uint64]common.Hash)
 	}
 
@@ -522,23 +527,23 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.getDeletedStateObject(addr); obj != nil && !obj.deleted {
 
-		if rr.RecordReplay {
+		if RecordReplay {
 			sAddr := stypes.Address(addr)
-			// insert the account in StateDB.SubstatePreAlloc
-			if _, exist := s.SubstatePreAlloc[sAddr]; !exist {
-				s.SubstatePreAlloc[sAddr] = substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
+			// insert the account in StateDB.PreWorldState
+			if _, exist := s.PreWorldState[sAddr]; !exist {
+				s.PreWorldState[sAddr] = substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 			}
 		}
 
 		return obj
 	}
 
-	if rr.RecordReplay {
+	if RecordReplay {
 		sAddr := stypes.Address(addr)
-		// insert empty account in StateDB.SubstatePreAlloc
+		// insert empty account in StateDB.PreWorldState
 		// This will prevent insertion of new account created in txs
-		if _, exist := s.SubstatePreAlloc[sAddr]; !exist {
-			s.SubstatePreAlloc[sAddr] = nil
+		if _, exist := s.PreWorldState[sAddr]; !exist {
+			s.PreWorldState[sAddr] = nil
 		}
 	}
 
@@ -751,16 +756,16 @@ func (s *StateDB) Copy() *StateDB {
 		state.preimages[hash] = preimage
 	}
 
-	if rr.RecordReplay {
+	if RecordReplay {
 		// copy StateDB.Substate*
-		state.SubstatePreAlloc = make(substate.WorldState)
-		state.SubstatePostAlloc = make(substate.WorldState)
+		state.PreWorldState = make(substate.WorldState)
+		state.PostWorldState = make(substate.WorldState)
 		state.SubstateBlockHashes = make(map[uint64]common.Hash)
-		for addr, account := range s.SubstatePreAlloc {
-			state.SubstatePreAlloc[addr] = account.Copy()
+		for addr, account := range s.PreWorldState {
+			state.PreWorldState[addr] = account.Copy()
 		}
-		for addr, account := range s.SubstatePostAlloc {
-			state.SubstatePostAlloc[addr] = account.Copy()
+		for addr, account := range s.PostWorldState {
+			state.PostWorldState[addr] = account.Copy()
 		}
 		for num64, bhash := range s.SubstateBlockHashes {
 			state.SubstateBlockHashes[num64] = bhash
@@ -842,11 +847,11 @@ func (s *StateDB) GetRefund() uint64 {
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
-	if rr.RecordReplay {
+	if RecordReplay {
 		// copy original storage values to Prestate and Poststate
-		for addr, sa := range s.SubstatePreAlloc {
+		for addr, sa := range s.PreWorldState {
 			if sa == nil {
-				delete(s.SubstatePreAlloc, addr)
+				delete(s.PreWorldState, addr)
 				continue
 			}
 			ethAddr := common.Address(addr)
@@ -856,7 +861,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				sv := stypes.Hash(obj.GetCommittedState(s.db, key))
 				sa.Storage[sKey] = sv
 			}
-			s.SubstatePostAlloc[addr] = sa.Copy()
+			s.PostWorldState[addr] = sa.Copy()
 		}
 	}
 
@@ -884,22 +889,22 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				delete(s.snapAccounts, obj.addrHash)       // Clear out any previously updated account data (may be recreated via a ressurrect)
 				delete(s.snapStorage, obj.addrHash)        // Clear out any previously updated storage data (may be recreated via a ressurrect)
 			}
-			if rr.RecordReplay {
+			if RecordReplay {
 				sAddr := stypes.Address(addr)
-				// delete account from StateDB.SubstatePostAlloc
-				delete(s.SubstatePostAlloc, sAddr)
+				// delete account from StateDB.PostWorldState
+				delete(s.PostWorldState, sAddr)
 			}
 		} else {
-			if rr.RecordReplay {
+			if RecordReplay {
 				sAddr := stypes.Address(addr)
-				// copy dirty account to StateDB.SubstatePostAlloc
+				// copy dirty account to StateDB.PostWorldState
 				sa := substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 				for key := range obj.AccessedStorage {
 					sKey := stypes.Hash(key)
 					sv := stypes.Hash(obj.GetState(s.db, key))
 					sa.Storage[sKey] = sv
 				}
-				s.SubstatePostAlloc[sAddr] = sa
+				s.PostWorldState[sAddr] = sa
 			}
 			obj.finalise(true) // Prefetch slots in the background
 		}
@@ -985,10 +990,10 @@ func (s *StateDB) Prepare(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
 
-	if rr.RecordReplay {
+	if RecordReplay {
 		// reset StateDB.Substate* and stateObject.Substate*
-		s.SubstatePreAlloc = make(substate.WorldState)
-		s.SubstatePostAlloc = make(substate.WorldState)
+		s.PreWorldState = make(substate.WorldState)
+		s.PostWorldState = make(substate.WorldState)
 		s.SubstateBlockHashes = make(map[uint64]common.Hash)
 		for _, obj := range s.stateObjects {
 			obj.AccessedStorage = make(map[common.Hash]struct{})
@@ -1141,6 +1146,6 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 	return s.accessList.Contains(addr, slot)
 }
 
-func (s *StateDB) GetSubstatePostAlloc() substate.WorldState {
-	return s.SubstatePostAlloc
+func (s *StateDB) GetPostWorldState() substate.WorldState {
+	return s.PostWorldState
 }

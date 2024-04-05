@@ -238,6 +238,12 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CatalystFlag,
 		},
 	},
+	{
+		Name: "SUBSTATE",
+		Flags: []cli.Flag{
+			utils.RecordingFlag,
+		},
+	},
 }
 
 func init() {
