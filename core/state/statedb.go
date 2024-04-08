@@ -858,8 +858,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			obj := s.stateObjects[ethAddr]
 			for key := range obj.AccessedStorage {
 				sKey := stypes.Hash(key)
-				sv := stypes.Hash(obj.GetCommittedState(s.db, key))
-				sa.Storage[sKey] = sv
+				sValue := stypes.Hash(obj.GetCommittedState(s.db, key))
+				sa.Storage[sKey] = sValue
 			}
 			s.PostWorldState[addr] = sa.Copy()
 		}
@@ -901,8 +901,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				sa := substate.NewAccount(obj.Nonce(), obj.Balance(), obj.Code(s.db))
 				for key := range obj.AccessedStorage {
 					sKey := stypes.Hash(key)
-					sv := stypes.Hash(obj.GetState(s.db, key))
-					sa.Storage[sKey] = sv
+					sValue := stypes.Hash(obj.GetState(s.db, key))
+					sa.Storage[sKey] = sValue
 				}
 				s.PostWorldState[sAddr] = sa
 			}
