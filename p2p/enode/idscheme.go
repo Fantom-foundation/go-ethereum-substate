@@ -67,7 +67,7 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	var opera operaNodeEnrEntry
 	err := r.Load(&opera)
 	if err != nil {
-		return fmt.Errorf("invalid opera node; %s", err.Error())
+		return fmt.Errorf("invalid opera node; %w", err)
 	}
 
 	var entry s256raw
