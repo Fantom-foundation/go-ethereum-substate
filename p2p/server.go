@@ -637,6 +637,7 @@ func (srv *Server) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
+		srv.discmix.AddSource(srv.DiscV5.RandomNodes())
 	}
 	return nil
 }
