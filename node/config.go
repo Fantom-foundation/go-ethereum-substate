@@ -306,15 +306,6 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for "geth" instances.
-var isOldGethResource = map[string]bool{
-	"chaindata":          true,
-	"nodes":              true,
-	"nodekey":            true,
-	"static-nodes.json":  false, // no warning for these because they have their
-	"trusted-nodes.json": false, // own separate warning.
-}
-
 // ResolvePath resolves path in the instance directory.
 func (c *Config) ResolvePath(path string) string {
 	if filepath.IsAbs(path) {
@@ -323,20 +314,6 @@ func (c *Config) ResolvePath(path string) string {
 	if c.DataDir == "" {
 		return ""
 	}
-	// Backwards-compatibility: ensure that data directory files created
-	// by geth 1.4 are used if they exist.
-	if warn, isOld := isOldGethResource[path]; isOld {
-		oldpath := ""
-		if c.name() == "geth" {
-			oldpath = filepath.Join(c.DataDir, path)
-		}
-		if oldpath != "" && common.FileExist(oldpath) {
-			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
-			}
-			return oldpath
-		}
-	}
 	return filepath.Join(c.instanceDir(), path)
 }
 
@@ -344,7 +321,7 @@ func (c *Config) instanceDir() string {
 	if c.DataDir == "" {
 		return ""
 	}
-	return filepath.Join(c.DataDir, c.name())
+	return filepath.Join(c.DataDir, "p2p")
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking
@@ -373,7 +350,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err != nil {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
-	instanceDir := filepath.Join(c.DataDir, c.name())
+	instanceDir := c.instanceDir()
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
