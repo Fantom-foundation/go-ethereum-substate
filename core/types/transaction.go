@@ -496,7 +496,7 @@ func (tx *Transaction) Hash() common.Hash {
 }
 
 func (tx *Transaction) SetHash(h common.Hash) {
-	tx.hash.Store(h)
+	tx.hash.Store(&h)
 }
 
 // Size returns the true encoded storage size of the transaction, either by encoding
