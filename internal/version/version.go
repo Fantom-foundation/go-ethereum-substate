@@ -72,7 +72,7 @@ func ClientName(clientIdentifier string) string {
 // it will assume it's imported by a third-party and will return the imported
 // version and whether it was replaced by another module.
 func Info() (version, vcs string) {
-	version = params.VersionWithMeta
+	version = params.VersionWithMeta()
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
 		return version, ""
@@ -115,7 +115,7 @@ func versionInfo(info *debug.BuildInfo) string {
 		// If our module path wasn't imported, it's unclear which
 		// version of our code they are running. Fallback to hardcoded
 		// version.
-		return version + fmt.Sprintf("geth %s", params.VersionWithMeta)
+		return version + fmt.Sprintf("geth %s", params.VersionWithMeta())
 	}
 	// Our package is a dependency for the main module. Return path and
 	// version data for both.

@@ -831,7 +831,7 @@ func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engin
 		{
 			Code:    engine.ClientCode,
 			Name:    engine.ClientName,
-			Version: params.VersionWithMeta,
+			Version: params.VersionWithMeta(),
 			Commit:  hexutil.Encode(commit),
 		},
 	}
