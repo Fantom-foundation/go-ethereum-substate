@@ -581,6 +581,7 @@ func (srv *Server) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
+		srv.discmix.AddSource(srv.DiscV5.RandomNodes())
 	}
 
 	// Add protocol-specific discovery sources.
@@ -606,6 +607,8 @@ func (srv *Server) setupDialScheduler() {
 	}
 	if srv.ntab != nil {
 		config.resolver = srv.ntab
+	} else if srv.DiscV5 != nil {
+		config.resolver = srv.DiscV5
 	}
 	if config.dialer == nil {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
