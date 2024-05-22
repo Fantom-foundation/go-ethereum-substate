@@ -956,6 +956,9 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		if !c.is(inboundConn) {
 			markDialError(err)
 		}
+		if c.is(staticDialedConn) {
+			srv.log.Warn("Failed static peer setup", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
+		}
 		c.close(err)
 	}
 	return err
