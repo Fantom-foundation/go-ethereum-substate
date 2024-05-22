@@ -485,7 +485,10 @@ func (t *dialTask) run(d *dialScheduler) {
 		// For static nodes, resolve one more time if dialing fails.
 		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
 			if t.resolve(d) {
-				t.dial(d, t.dest())
+				dest := t.dest()
+				if err := t.dial(d, dest); err != nil {
+					d.log.Warn("Dialing static node failed", "id", dest.ID(), "addr", nodeAddr(dest), "conn", t.flags, "err", cleanupDialErr(err))
+				}
 			}
 		}
 	}
