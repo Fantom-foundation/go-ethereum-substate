@@ -94,6 +94,9 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 	err := s.Decode(&dec)
 	if err == nil {
 		l.Address, l.Topics, l.Data = dec.Address, dec.Topics, dec.Data
+		if l.Topics == nil {
+			l.Topics = make([]common.Hash, 0)
+		}
 	}
 	return err
 }
@@ -138,6 +141,9 @@ func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
 				Data:    dec.Data,
 			}
 		}
+	}
+	if err == nil && l.Topics == nil {
+		l.Topics = make([]common.Hash, 0)
 	}
 	return err
 }
