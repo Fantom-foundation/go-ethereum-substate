@@ -1676,7 +1676,7 @@ func TestGetClientVersion(t *testing.T) {
 		t.Fatalf("expected only one returned client version, got %d", len(infos))
 	}
 	info = infos[0]
-	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta {
+	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta() {
 		t.Fatalf("client info does match expected, got %s", info.String())
 	}
 }
