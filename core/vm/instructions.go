@@ -17,7 +17,6 @@
 package vm
 
 import (
-	substate "github.com/Fantom-foundation/Substate"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -445,7 +444,7 @@ func opBlockhash(pc *uint64, interpreter *GethEVMInterpreter, scope *ScopeContex
 	num := scope.Stack.peek()
 	num64, overflow := num.Uint64WithOverflow()
 
-	if substate.RecordReplay {
+	if state.RecordReplay {
 		// convert vm.StateDB to state.StateDB and save block hash
 		defer func() {
 			statedb, ok := interpreter.evm.StateDB.(*state.StateDB)
