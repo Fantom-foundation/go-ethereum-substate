@@ -19,6 +19,7 @@ package tracers
 
 import (
 	"strings"
+	"sync/atomic"
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/eth/tracers/internal/tracers"
@@ -26,6 +27,18 @@ import (
 
 // all contains all the built in JavaScript tracers by name.
 var all = make(map[string]string)
+
+var (
+	// jsTracerLimit limits number of concurent js engines, 0 = unlimited
+	jsTracerLimit int
+	// jsTracerCount is counter for number of concurent js engines
+	jsTracerCount atomic.Int32
+)
+
+// SetConcurentJSLimit sets execution limit of concurent js engines
+func SetConcurentJSLimit(limit int) {
+	jsTracerLimit = limit
+}
 
 // camel converts a snake cased input string into a camel cased output.
 func camel(str string) string {

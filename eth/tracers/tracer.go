@@ -414,6 +414,13 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	if tracer, ok := tracer(code); ok {
 		code = tracer
 	}
+
+	trCount := jsTracerCount.Load()
+	if jsTracerLimit != 0 && jsTracerLimit < int(trCount) {
+		return nil, fmt.Errorf("too many concurent js tracers: %v ", trCount)
+	}
+	jsTracerCount.Add(1)
+
 	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
@@ -632,6 +639,11 @@ func (jst *Tracer) Stop(err error) {
 	atomic.StoreUint32(&jst.interrupt, 1)
 }
 
+// GetJsTracerCount returns actual value of a concurent js engine counter
+func (jst *Tracer) GetJsTracerCount() int {
+	return int(jsTracerCount.Load())
+}
+
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
 func (jst *Tracer) call(noret bool, method string, args ...string) (json.RawMessage, error) {
@@ -831,6 +843,7 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	// Clean up the JavaScript environment
 	jst.vm.DestroyHeap()
 	jst.vm.Destroy()
+	jsTracerCount.Add(-1)
 
 	return result, jst.err
 }
