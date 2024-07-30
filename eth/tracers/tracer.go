@@ -415,11 +415,11 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		code = tracer
 	}
 
-	trCount := jsTracerCount.Load()
+	trCount := jsTracerCount.Add(1)
 	if jsTracerLimit != 0 && jsTracerLimit < int(trCount) {
+		jsTracerCount.Add(-1)
 		return nil, fmt.Errorf("too many concurent js tracers: %v ", trCount)
 	}
-	jsTracerCount.Add(1)
 
 	tracer := &Tracer{
 		vm:              duktape.New(),
