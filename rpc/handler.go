@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,11 +31,17 @@ import (
 
 var (
 	executionTimeLimit = 5 * time.Second
+	batchItemLimit     = 0
 )
 
 // SetExecutionTimeLimit sets execution limit for RPC method calls
 func SetExecutionTimeLimit(limit time.Duration) {
 	executionTimeLimit = limit
+}
+
+// SetBatchItemLimit sets limit for batch items in RPC call
+func SetBatchItemLimit(limit int) {
+	batchItemLimit = limit
 }
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
@@ -107,6 +114,14 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 	if len(msgs) == 0 {
 		h.startCallProc(func(cp *callProc) {
 			h.conn.writeJSON(cp.ctx, errorMessage(&invalidRequestError{"empty batch"}))
+		})
+		return
+	}
+
+	// Emit error response for too big batches:
+	if batchItemLimit != 0 && len(msgs) > batchItemLimit {
+		h.startCallProc(func(cp *callProc) {
+			h.conn.writeJSON(cp.ctx, errorMessage(fmt.Errorf("batch too big, limit is %v, batch size is %v", batchItemLimit, len(msgs))))
 		})
 		return
 	}
