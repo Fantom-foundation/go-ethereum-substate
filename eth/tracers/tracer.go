@@ -396,6 +396,7 @@ type Tracer struct {
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 	traceSteps        bool             // When true, will invoke step() on each opcode
 	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
+	destroyed         bool
 }
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -840,12 +841,21 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		jst.err = wrapError("result", err)
 	}
-	// Clean up the JavaScript environment
-	jst.vm.DestroyHeap()
-	jst.vm.Destroy()
-	jsTracerCount.Add(-1)
+	jst.Destroy()
 
 	return result, jst.err
+}
+
+// Destroy Clean up the JavaScript environment
+func (jst *Tracer) Destroy() {
+	if !jst.destroyed {
+
+		jst.destroyed = true
+		jsTracerCount.Add(-1)
+
+		jst.vm.DestroyHeap()
+		jst.vm.Destroy()
+	}
 }
 
 // addToObj pushes a field to a JS object.
