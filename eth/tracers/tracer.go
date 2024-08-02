@@ -409,11 +409,19 @@ type Context struct {
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
+// For releasing resources always use tracer Destroy() function.
 func New(code string, ctx *Context) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
 		code = tracer
 	}
+
+	trCount := jsTracerCount.Add(1)
+	if jsTracerLimit != 0 && jsTracerLimit < int(trCount) {
+		jsTracerCount.Add(-1)
+		return nil, fmt.Errorf("too many concurent js tracers: %v ", trCount)
+	}
+
 	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
@@ -632,6 +640,11 @@ func (jst *Tracer) Stop(err error) {
 	atomic.StoreUint32(&jst.interrupt, 1)
 }
 
+// GetJsTracerCount returns actual value of a concurent js engine counter
+func (jst *Tracer) GetJsTracerCount() int {
+	return int(jsTracerCount.Load())
+}
+
 // call executes a method on a JS object, catching any errors, formatting and
 // returning them as error objects.
 func (jst *Tracer) call(noret bool, method string, args ...string) (json.RawMessage, error) {
@@ -828,11 +841,20 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		jst.err = wrapError("result", err)
 	}
-	// Clean up the JavaScript environment
-	jst.vm.DestroyHeap()
-	jst.vm.Destroy()
 
 	return result, jst.err
+}
+
+// Destroy Clean up the JavaScript environment
+func (jst *Tracer) Destroy() {
+	if jst.vm != nil {
+		// Decrement tracer counter
+		jsTracerCount.Add(-1)
+		// Release resources
+		jst.vm.DestroyHeap()
+		jst.vm.Destroy()
+		jst.vm = nil
+	}
 }
 
 // addToObj pushes a field to a JS object.
