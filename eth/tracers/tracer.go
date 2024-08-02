@@ -548,13 +548,13 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
-		jsTracerCount.Add(-1)
+		tracer.Destroy()
 		return nil, fmt.Errorf("trace object must expose a function fault()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "result") {
-		jsTracerCount.Add(-1)
+		tracer.Destroy()
 		return nil, fmt.Errorf("trace object must expose a function result()")
 	}
 	tracer.vm.Pop()
@@ -565,13 +565,13 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	tracer.vm.Pop()
 
 	if hasEnter != hasExit {
-		jsTracerCount.Add(-1)
+		tracer.Destroy()
 		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 	}
 	if !hasStep {
 		// If there's no step function, the enter and exit must be present
 		if !hasEnter {
-			jsTracerCount.Add(-1)
+			tracer.Destroy()
 			return nil, fmt.Errorf("trace object must expose either step() or both enter() and exit()")
 		}
 	}
