@@ -396,7 +396,6 @@ type Tracer struct {
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 	traceSteps        bool             // When true, will invoke step() on each opcode
 	traceCallFrames   bool             // When true, will invoke enter() and exit() js funcs
-	destroyed         bool
 }
 
 // Context contains some contextual infos for a transaction execution that is not
@@ -410,6 +409,7 @@ type Context struct {
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
+// For releasing resources always use tracer Destroy() function.
 func New(code string, ctx *Context) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
 	if tracer, ok := tracer(code); ok {
@@ -841,20 +841,19 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		jst.err = wrapError("result", err)
 	}
-	jst.Destroy()
 
 	return result, jst.err
 }
 
 // Destroy Clean up the JavaScript environment
 func (jst *Tracer) Destroy() {
-	if !jst.destroyed {
-
-		jst.destroyed = true
+	if jst.vm != nil {
+		// Decrement tracer counter
 		jsTracerCount.Add(-1)
-
+		// Release resources
 		jst.vm.DestroyHeap()
 		jst.vm.Destroy()
+		jst.vm = nil
 	}
 }
 
