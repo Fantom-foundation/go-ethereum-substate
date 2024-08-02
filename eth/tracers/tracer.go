@@ -548,11 +548,13 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
+		jsTracerCount.Add(-1)
 		return nil, fmt.Errorf("trace object must expose a function fault()")
 	}
 	tracer.vm.Pop()
 
 	if !tracer.vm.GetPropString(tracer.tracerObject, "result") {
+		jsTracerCount.Add(-1)
 		return nil, fmt.Errorf("trace object must expose a function result()")
 	}
 	tracer.vm.Pop()
@@ -563,11 +565,13 @@ func New(code string, ctx *Context) (*Tracer, error) {
 	tracer.vm.Pop()
 
 	if hasEnter != hasExit {
+		jsTracerCount.Add(-1)
 		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 	}
 	if !hasStep {
 		// If there's no step function, the enter and exit must be present
 		if !hasEnter {
+			jsTracerCount.Add(-1)
 			return nil, fmt.Errorf("trace object must expose either step() or both enter() and exit()")
 		}
 	}
@@ -847,14 +851,15 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 // Destroy Clean up the JavaScript environment
 func (jst *Tracer) Destroy() {
-	if jst.vm != nil {
-		// Decrement tracer counter
-		jsTracerCount.Add(-1)
-		// Release resources
-		jst.vm.DestroyHeap()
-		jst.vm.Destroy()
-		jst.vm = nil
+	if jst == nil || jst.vm == nil {
+		return
 	}
+	// Decrement tracer counter
+	jsTracerCount.Add(-1)
+	// Release resources
+	jst.vm.DestroyHeap()
+	jst.vm.Destroy()
+	jst.vm = nil
 }
 
 // addToObj pushes a field to a JS object.
