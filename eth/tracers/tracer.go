@@ -446,12 +446,31 @@ func New(code string, ctx *Context) (*Tracer, error) {
 			tracer.ctx["txHash"] = ctx.TxHash
 		}
 	}
+
+	tracer.initVMFunctions()
+
+	if err := tracer.initCode(code); err != nil {
+		// In case of error release resources
+		jsTracerCount.Add(-1)
+		tracer.vm.DestroyHeap()
+		tracer.vm.Destroy()
+		tracer.vm = nil
+		return nil, err
+	}
+
+	tracer.initVMProperties()
+
+	return tracer, nil
+}
+
+// initVMFunctions Pushes main vm functions to tracer engine
+func (jst *Tracer) initVMFunctions() {
 	// Set up builtins for this environment
-	tracer.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("toHex", func(ctx *duktape.Context) int {
 		ctx.PushString(hexutil.Encode(popSlice(ctx)))
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("toWord", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("toWord", func(ctx *duktape.Context) int {
 		var word common.Hash
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
 			word = common.BytesToHash(makeSlice(ptr, size))
@@ -462,7 +481,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(32), 32), word[:])
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("toAddress", func(ctx *duktape.Context) int {
 		var addr common.Address
 		if ptr, size := ctx.GetBuffer(-1); ptr != nil {
 			addr = common.BytesToAddress(makeSlice(ptr, size))
@@ -473,7 +492,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), addr[:])
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("toContract", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("toContract", func(ctx *duktape.Context) int {
 		var from common.Address
 		if ptr, size := ctx.GetBuffer(-2); ptr != nil {
 			from = common.BytesToAddress(makeSlice(ptr, size))
@@ -487,7 +506,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("toContract2", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("toContract2", func(ctx *duktape.Context) int {
 		var from common.Address
 		if ptr, size := ctx.GetBuffer(-3); ptr != nil {
 			from = common.BytesToAddress(makeSlice(ptr, size))
@@ -509,9 +528,9 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(20), 20), contract[:])
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("isPrecompiled", func(ctx *duktape.Context) int {
 		addr := common.BytesToAddress(popSlice(ctx))
-		for _, p := range tracer.activePrecompiles {
+		for _, p := range jst.activePrecompiles {
 			if p == addr {
 				ctx.PushBoolean(true)
 				return 1
@@ -520,7 +539,7 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		ctx.PushBoolean(false)
 		return 1
 	})
-	tracer.vm.PushGlobalGoFunction("slice", func(ctx *duktape.Context) int {
+	jst.vm.PushGlobalGoFunction("slice", func(ctx *duktape.Context) int {
 		start, end := ctx.GetInt(-2), ctx.GetInt(-1)
 		ctx.Pop2()
 
@@ -537,105 +556,109 @@ func New(code string, ctx *Context) (*Tracer, error) {
 		copy(makeSlice(ctx.PushFixedBuffer(size), uint(size)), blob[start:end])
 		return 1
 	})
+}
+
+// initCode Compiles and validates js code
+func (jst *Tracer) initCode(code string) error {
 	// Push the JavaScript tracer as object #0 onto the JSVM stack and validate it
-	if err := tracer.vm.PevalString("(" + code + ")"); err != nil {
+	if err := jst.vm.PevalString("(" + code + ")"); err != nil {
 		log.Warn("Failed to compile tracer", "err", err)
-		return nil, err
+		return err
 	}
-	tracer.tracerObject = 0 // yeah, nice, eval can't return the index itself
+	jst.tracerObject = 0 // yeah, nice, eval can't return the index itself
 
-	hasStep := tracer.vm.GetPropString(tracer.tracerObject, "step")
-	tracer.vm.Pop()
+	hasStep := jst.vm.GetPropString(jst.tracerObject, "step")
+	jst.vm.Pop()
 
-	if !tracer.vm.GetPropString(tracer.tracerObject, "fault") {
-		tracer.Destroy()
-		return nil, fmt.Errorf("trace object must expose a function fault()")
+	if !jst.vm.GetPropString(jst.tracerObject, "fault") {
+
+		return fmt.Errorf("trace object must expose a function fault()")
 	}
-	tracer.vm.Pop()
+	jst.vm.Pop()
 
-	if !tracer.vm.GetPropString(tracer.tracerObject, "result") {
-		tracer.Destroy()
-		return nil, fmt.Errorf("trace object must expose a function result()")
+	if !jst.vm.GetPropString(jst.tracerObject, "result") {
+		return fmt.Errorf("trace object must expose a function result()")
 	}
-	tracer.vm.Pop()
+	jst.vm.Pop()
 
-	hasEnter := tracer.vm.GetPropString(tracer.tracerObject, "enter")
-	tracer.vm.Pop()
-	hasExit := tracer.vm.GetPropString(tracer.tracerObject, "exit")
-	tracer.vm.Pop()
+	hasEnter := jst.vm.GetPropString(jst.tracerObject, "enter")
+	jst.vm.Pop()
+	hasExit := jst.vm.GetPropString(jst.tracerObject, "exit")
+	jst.vm.Pop()
 
 	if hasEnter != hasExit {
-		tracer.Destroy()
-		return nil, fmt.Errorf("trace object must expose either both or none of enter() and exit()")
+		return fmt.Errorf("trace object must expose either both or none of enter() and exit()")
 	}
 	if !hasStep {
 		// If there's no step function, the enter and exit must be present
 		if !hasEnter {
-			tracer.Destroy()
-			return nil, fmt.Errorf("trace object must expose either step() or both enter() and exit()")
+			return fmt.Errorf("trace object must expose either step() or both enter() and exit()")
 		}
 	}
-	tracer.traceCallFrames = hasEnter
-	tracer.traceSteps = hasStep
+	jst.traceCallFrames = hasEnter
+	jst.traceSteps = hasStep
 
+	return nil
+}
+
+// initVMProperties Sets tracer properties
+func (jst *Tracer) initVMProperties() {
 	// Tracer is valid, inject the big int library to access large numbers
-	tracer.vm.EvalString(bigIntegerJS)
-	tracer.vm.PutGlobalString("bigInt")
+	jst.vm.EvalString(bigIntegerJS)
+	jst.vm.PutGlobalString("bigInt")
 
 	// Push the global environment state as object #1 into the JSVM stack
-	tracer.stateObject = tracer.vm.PushObject()
+	jst.stateObject = jst.vm.PushObject()
 
-	logObject := tracer.vm.PushObject()
+	logObject := jst.vm.PushObject()
 
-	tracer.opWrapper.pushObject(tracer.vm)
-	tracer.vm.PutPropString(logObject, "op")
+	jst.opWrapper.pushObject(jst.vm)
+	jst.vm.PutPropString(logObject, "op")
 
-	tracer.stackWrapper.pushObject(tracer.vm)
-	tracer.vm.PutPropString(logObject, "stack")
+	jst.stackWrapper.pushObject(jst.vm)
+	jst.vm.PutPropString(logObject, "stack")
 
-	tracer.memoryWrapper.pushObject(tracer.vm)
-	tracer.vm.PutPropString(logObject, "memory")
+	jst.memoryWrapper.pushObject(jst.vm)
+	jst.vm.PutPropString(logObject, "memory")
 
-	tracer.contractWrapper.pushObject(tracer.vm)
-	tracer.vm.PutPropString(logObject, "contract")
+	jst.contractWrapper.pushObject(jst.vm)
+	jst.vm.PutPropString(logObject, "contract")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.pcValue); return 1 })
-	tracer.vm.PutPropString(logObject, "getPC")
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*jst.pcValue); return 1 })
+	jst.vm.PutPropString(logObject, "getPC")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.gasValue); return 1 })
-	tracer.vm.PutPropString(logObject, "getGas")
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*jst.gasValue); return 1 })
+	jst.vm.PutPropString(logObject, "getGas")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.costValue); return 1 })
-	tracer.vm.PutPropString(logObject, "getCost")
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*jst.costValue); return 1 })
+	jst.vm.PutPropString(logObject, "getCost")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.depthValue); return 1 })
-	tracer.vm.PutPropString(logObject, "getDepth")
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*jst.depthValue); return 1 })
+	jst.vm.PutPropString(logObject, "getDepth")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*tracer.refundValue); return 1 })
-	tracer.vm.PutPropString(logObject, "getRefund")
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int { ctx.PushUint(*jst.refundValue); return 1 })
+	jst.vm.PutPropString(logObject, "getRefund")
 
-	tracer.vm.PushGoFunction(func(ctx *duktape.Context) int {
-		if tracer.errorValue != nil {
-			ctx.PushString(*tracer.errorValue)
+	jst.vm.PushGoFunction(func(ctx *duktape.Context) int {
+		if jst.errorValue != nil {
+			ctx.PushString(*jst.errorValue)
 		} else {
 			ctx.PushUndefined()
 		}
 		return 1
 	})
-	tracer.vm.PutPropString(logObject, "getError")
+	jst.vm.PutPropString(logObject, "getError")
 
-	tracer.vm.PutPropString(tracer.stateObject, "log")
+	jst.vm.PutPropString(jst.stateObject, "log")
 
-	tracer.frame.pushObject(tracer.vm)
-	tracer.vm.PutPropString(tracer.stateObject, "frame")
+	jst.frame.pushObject(jst.vm)
+	jst.vm.PutPropString(jst.stateObject, "frame")
 
-	tracer.frameResult.pushObject(tracer.vm)
-	tracer.vm.PutPropString(tracer.stateObject, "frameResult")
+	jst.frameResult.pushObject(jst.vm)
+	jst.vm.PutPropString(jst.stateObject, "frameResult")
 
-	tracer.dbWrapper.pushObject(tracer.vm)
-	tracer.vm.PutPropString(tracer.stateObject, "db")
-
-	return tracer, nil
+	jst.dbWrapper.pushObject(jst.vm)
+	jst.vm.PutPropString(jst.stateObject, "db")
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -851,7 +874,7 @@ func (jst *Tracer) GetResult() (json.RawMessage, error) {
 
 // Destroy Clean up the JavaScript environment
 func (jst *Tracer) Destroy() {
-	if jst == nil || jst.vm == nil {
+	if jst.vm == nil {
 		return
 	}
 	// Decrement tracer counter
