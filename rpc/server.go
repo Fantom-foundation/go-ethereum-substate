@@ -125,7 +125,7 @@ func (s *Server) Stop() {
 	log.Debug("RPC server shutting down")
 	s.codecs.Each(func(c interface{}) bool {
 		c.(ServerCodec).close()
-		return true
+		return false
 	})
 	s.services.callWG.Wait()
 }
